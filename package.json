@@ -1,0 +1,66 @@
+{
+  "name": "trading-strategy-skill",
+  "version": "1.0.0",
+  "description": "AI交易策略分析技能，提供基于技术指标的智能交易信号和风险管理建议",
+  "main": "src/TradingStrategySkill.js",
+  "scripts": {
+    "start": "node scripts/analyze.js",
+    "dev": "node scripts/analyze.js --symbol BTC/USDT --timeframe 1h",
+    "batch": "node scripts/batch-analyze.js --symbols BTC/USDT,ETH/USDT,SOL/USDT",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=test/unit",
+    "test:integration": "jest --testPathPattern=test/integration",
+    "test:coverage": "jest --coverage",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "format": "prettier --write \"src/**/*.js\" \"scripts/**/*.js\" \"test/**/*.js\"",
+    "docs": "node scripts/generate-docs.js"
+  },
+  "keywords": [
+    "trading",
+    "strategy",
+    "crypto",
+    "analysis",
+    "ai",
+    "skill",
+    "okx",
+    "rsi",
+    "technical-analysis"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "ta-lib": "^0.0.1",
+    "technicalindicators": "^3.1.0",
+    "dotenv": "^16.3.0",
+    "winston": "^3.11.0",
+    "moment": "^2.29.4"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "standard": "^17.1.0",
+    "prettier": "^3.1.0",
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/trading-strategy-skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/trading-strategy-skill/issues"
+  },
+  "homepage": "https://github.com/your-username/trading-strategy-skill#readme",
+  "files": [
+    "src/",
+    "scripts/",
+    "config/",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ]
+}
