@@ -1,7 +1,7 @@
 ---
 name: smart-trading-signals
 title: 智能交易信号
-description: 基于OKX CLI的多策略交易信号分析，集成RSI和MACD技术指标，提供智能买卖信号和风险管理建议
+description: 基于RSI和MACD双指标的交易信号分析Skill，提供智能买卖信号和风险管理建议
 version: 1.0.0
 author: 菊中菊
 category: trading-analysis
@@ -13,803 +13,64 @@ tags:
   - signals
   - risk-management
 requires:
-  - okx-cli
+  - okx-cex-market
+  - okx-cex-trade
 ---
 
 # 智能交易信号
 
-## 🚀 完整可执行实现
+## 🎯 技能概述
 
-本技能提供完整的、可在OKX CLI/MCP环境中实际执行的交易信号分析功能。
+智能交易信号是一个基于RSI和MACD双指标的交易信号分析Skill。当用户需要交易信号分析、风险管理建议或批量机会扫描时，可以使用此技能。
 
-### ✅ 功能特性
-- **实时数据获取**: 调用 `okx market` 命令获取实时行情
-- **技术指标计算**: 使用 `okx market indicator` 获取RSI、MACD等指标
-- **多策略分析**: RSI + MACD双指标交叉验证
-- **智能风险评分**: 基于市场波动性和信号一致性
-- **批量机会扫描**: 多交易对同时分析
-- **安全凭证管理**: 安全的API密钥存储和使用
+### 触发词
+- '交易信号'
+- '智能分析'
+- 'RSI MACD'
+- '批量扫描'
+- '风险评估'
+- '交易建议'
 
-## 📦 安装与配置
+### 功能特点
+- **双指标验证**: RSI + MACD交叉验证，提高信号准确性
+- **智能风险评分**: 基于市场波动性和信号一致性的动态风险评估
+- **批量机会扫描**: 同时分析多个交易对，找出最佳交易机会
+- **个性化配置**: 支持自定义策略参数和风险偏好
 
-### 1. 安装OKX CLI
+## 🚀 安装方式
+
+### 一键安装
 ```bash
-# 安装OKX CLI
-npm install -g @okx/cli
-
-# 验证安装
-okx --version
+npx @okx_ai/okx-trade-cli@latest skill add smart-trading-signals
 ```
 
-### 2. 配置API凭证（⚠️ 安全警告）
+### 手动安装
+1. 确保已安装OKX Trade CLI
+2. 运行安装命令：
 ```bash
-# ⚠️ 安全提示：请勿在公共场合执行此命令
-# ⚠️ 建议使用环境变量或安全配置文件
-
-# 方法1：交互式配置（推荐）
-okx config set
-
-# 方法2：环境变量（最安全）
-export OKX_API_KEY="your_api_key"
-export OKX_API_SECRET="your_api_secret" 
-export OKX_PASSPHRASE="your_passphrase"
-
-# 方法3：命令行参数（临时使用）
-okx --api-key=your_key --api-secret=your_secret --passphrase=your_phrase market ticker --symbol BTC/USDT
+okx skill install smart-trading-signals
 ```
 
-### 3. 安全最佳实践
-- ✅ 使用环境变量存储敏感信息
-- ✅ 定期轮换API密钥
-- ✅ 设置IP白名单限制
-- ✅ 使用只读权限的API密钥
-- ❌ 不要在代码中硬编码密钥
-- ❌ 不要将密钥提交到版本控制系统
-- ❌ 不要在日志中输出敏感信息
+## 📖 使用方法
 
-## 🔧 完整实现代码
-
-### 核心技能文件：`smart-trading-signals.js`
-```javascript
-#!/usr/bin/env node
-
-/**
- * 智能交易信号 - 完整可执行实现
- * 可在OKX CLI/MCP环境中直接执行
- */
-
-const { spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-
-// 配置
-const CONFIG = {
-  defaultSymbol: 'BTC/USDT',
-  defaultTimeframe: '1h',
-  cacheTTL: 30000, // 30秒缓存
-  maxBatchSize: 10
-};
-
-// OKX CLI命令执行器
-class OKXCommand {
-  /**
-   * 执行OKX CLI命令
-   * @param {string} command - 命令
-   * @param {Array} args - 参数数组
-   * @returns {Promise<Object>} 命令结果
-   */
-  static async execute(command, args = []) {
-    return new Promise((resolve, reject) => {
-      const fullArgs = [command, ...args];
-      console.error(`📡 Executing: okx ${fullArgs.join(' ')}`);
-      
-      const child = spawn('okx', fullArgs, {
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-      
-      let stdout = '';
-      let stderr = '';
-      
-      child.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-      
-      child.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-      
-      child.on('close', (code) => {
-        if (code === 0) {
-          try {
-            const result = JSON.parse(stdout);
-            resolve(result);
-          } catch (e) {
-            resolve({ output: stdout.trim() });
-          }
-        } else {
-          reject(new Error(`OKX CLI error (${code}): ${stderr || 'Unknown error'}`));
-        }
-      });
-      
-      child.on('error', (err) => {
-        reject(new Error(`Failed to execute OKX CLI: ${err.message}`));
-      });
-    });
-  }
-  
-  /**
-   * 获取市场数据
-   */
-  static async getMarketData(symbol, timeframe = '1h', limit = 100) {
-    try {
-      // 获取实时价格
-      const ticker = await this.execute('market', ['ticker', '--symbol', symbol]);
-      
-      // 获取K线数据
-      const candles = await this.execute('market', [
-        'candles',
-        '--symbol', symbol,
-        '--timeframe', timeframe,
-        '--limit', limit.toString()
-      ]);
-      
-      return {
-        success: true,
-        symbol,
-        timeframe,
-        currentPrice: ticker.last,
-        priceChange: ticker.change,
-        volume: ticker.volume,
-        candles: candles.candles || [],
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-        symbol,
-        timestamp: new Date().toISOString()
-      };
-    }
-  }
-  
-  /**
-   * 获取技术指标
-   */
-  static async getIndicator(symbol, indicator, period = 14) {
-    try {
-      const args = [
-        'market', 'indicator',
-        '--symbol', symbol,
-        '--indicator', indicator
-      ];
-      
-      if (period) {
-        args.push('--period', period.toString());
-      }
-      
-      const result = await this.execute('market', args.slice(1));
-      return {
-        success: true,
-        symbol,
-        indicator,
-        value: result.value || result,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-        symbol,
-        indicator,
-        timestamp: new Date().toISOString()
-      };
-    }
-  }
-}
-
-// RSI策略分析器
-class RSIStrategy {
-  constructor(period = 14, overbought = 70, oversold = 30) {
-    this.period = period;
-    this.overbought = overbought;
-    this.oversold = oversold;
-  }
-  
-  async analyze(symbol) {
-    try {
-      // 调用OKX CLI获取RSI指标
-      const rsiData = await OKXCommand.getIndicator(symbol, 'RSI', this.period);
-      
-      if (!rsiData.success) {
-        throw new Error(`Failed to get RSI data: ${rsiData.error}`);
-      }
-      
-      const rsiValue = parseFloat(rsiData.value);
-      let signal = 'NEUTRAL';
-      let confidence = 0.5;
-      let reason = 'RSI in neutral range';
-      
-      if (rsiValue < this.oversold) {
-        signal = 'BUY';
-        confidence = Math.min(0.9, 0.7 + (this.oversold - rsiValue) / this.oversold * 0.2);
-        reason = `RSI oversold (${rsiValue.toFixed(2)} < ${this.oversold})`;
-      } else if (rsiValue > this.overbought) {
-        signal = 'SELL';
-        confidence = Math.min(0.9, 0.7 + (rsiValue - this.overbought) / (100 - this.overbought) * 0.2);
-        reason = `RSI overbought (${rsiValue.toFixed(2)} > ${this.overbought})`;
-      } else if (rsiValue < 40) {
-        signal = 'BUY';
-        confidence = 0.6;
-        reason = `RSI approaching oversold (${rsiValue.toFixed(2)})`;
-      } else if (rsiValue > 60) {
-        signal = 'SELL';
-        confidence = 0.6;
-        reason = `RSI approaching overbought (${rsiValue.toFixed(2)})`;
-      }
-      
-      return {
-        success: true,
-        strategy: 'RSI',
-        signal,
-        confidence,
-        reason,
-        value: rsiValue.toFixed(2),
-        parameters: {
-          period: this.period,
-          overbought: this.overbought,
-          oversold: this.oversold
-        },
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      return {
-        success: false,
-        strategy: 'RSI',
-        error: error.message,
-        timestamp: new Date().toISOString()
-      };
-    }
-  }
-}
-
-// MACD策略分析器
-class MACDStrategy {
-  constructor(fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
-    this.fastPeriod = fastPeriod;
-    this.slowPeriod = slowPeriod;
-    this.signalPeriod = signalPeriod;
-  }
-  
-  async analyze(symbol) {
-    try {
-      // 调用OKX CLI获取MACD指标
-      const macdData = await OKXCommand.getIndicator(symbol, 'MACD');
-      
-      if (!macdData.success) {
-        throw new Error(`Failed to get MACD data: ${macdData.error}`);
-      }
-      
-      // 解析MACD数据
-      let macdValue, signalValue, histogram;
-      
-      if (typeof macdData.value === 'object') {
-        macdValue = parseFloat(macdData.value.macd || 0);
-        signalValue = parseFloat(macdData.value.signal || 0);
-        histogram = parseFloat(macdData.value.histogram || 0);
-      } else {
-        // 如果返回的是单个值，使用模拟数据
-        macdValue = parseFloat(macdData.value) || (Math.random() * 2 - 1);
-        signalValue = macdValue * 0.9;
-        histogram = macdValue - signalValue;
-      }
-      
-      let signal = 'NEUTRAL';
-      let confidence = 0.5;
-      let reason = 'MACD neutral';
-      
-      // 金叉判断
-      if (macdValue > signalValue && histogram > 0) {
-        signal = 'BUY';
-        confidence = Math.min(0.9, 0.7 + (macdValue - signalValue) * 5);
-        reason = `MACD golden cross (MACD: ${macdValue.toFixed(4)} > Signal: ${signalValue.toFixed(4)})`;
-      }
-      // 死叉判断
-      else if (macdValue < signalValue && histogram < 0) {
-        signal = 'SELL';
-        confidence = Math.min(0.9, 0.7 + (signalValue - macdValue) * 5);
-        reason = `MACD death cross (MACD: ${macdValue.toFixed(4)} < Signal: ${signalValue.toFixed(4)})`;
-      }
-      // 零轴上方
-      else if (macdValue > 0 && signalValue > 0) {
-        signal = 'BUY';
-        confidence = 0.65;
-        reason = 'MACD above zero line';
-      }
-      // 零轴下方
-      else if (macdValue < 0 && signalValue < 0) {
-        signal = 'SELL';
-        confidence = 0.65;
-        reason = 'MACD below zero line';
-      }
-      
-      return {
-        success: true,
-        strategy: 'MACD',
-        signal,
-        confidence,
-        reason,
-        values: {
-          macd: macdValue.toFixed(4),
-          signal: signalValue.toFixed(4),
-          histogram: histogram.toFixed(4)
-        },
-        parameters: {
-          fastPeriod: this.fastPeriod,
-          slowPeriod: this.slowPeriod,
-          signalPeriod: this.signalPeriod
-        },
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      return {
-        success: false,
-        strategy: 'MACD',
-        error: error.message,
-        timestamp: new Date().toISOString()
-      };
-    }
-  }
-}
-
-// 智能交易信号主类
-class SmartTradingSignals {
-  constructor(config = {}) {
-    this.config = { ...CONFIG, ...config };
-    this.rsiStrategy = new RSIStrategy();
-    this.macdStrategy = new MACDStrategy();
-    this.cache = new Map();
-  }
-  
-  /**
-   * 分析单个交易对
-   */
-  async analyze(symbol = this.config.defaultSymbol, timeframe = this.config.defaultTimeframe) {
-    try {
-      console.error(`🔍 Analyzing ${symbol} (${timeframe})...`);
-      
-      // 获取市场数据
-      const marketData = await OKXCommand.getMarketData(symbol, timeframe, 100);
-      if (!marketData.success) {
-        throw new Error(`Market data error: ${marketData.error}`);
-      }
-      
-      // 执行策略分析
-      const [rsiResult, macdResult] = await Promise.all([
-        this.rsiStrategy.analyze(symbol),
-        this.macdStrategy.analyze(symbol)
-      ]);
-      
-      // 生成综合信号
-      const compositeSignal = this.generateCompositeSignal(rsiResult, macdResult);
-      
-      // 风险评估
-      const riskAssessment = this.assessRisk(marketData, rsiResult, macdResult);
-      
-      // 生成建议
-      const recommendations = this.generateRecommendations(compositeSignal, riskAssessment);
-      
-      return {
-        success: true,
-        symbol,
-        timeframe,
-        currentPrice: marketData.currentPrice,
-        priceChange: marketData.priceChange,
-        volume: marketData.volume,
-        strategies: {
-          RSI: rsiResult,
-          MACD: macdResult
-        },
-        compositeSignal,
-        riskAssessment,
-        recommendations,
-        summary: {
-          action: compositeSignal.signal,
-          confidence: `${(compositeSignal.confidence * 100).toFixed(1)}%`,
-          riskLevel: riskAssessment.level,
-          reason: compositeSignal.reason
-        },
-        timestamp: new Date().toISOString(),
-        dataSource: 'OKX CLI'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        symbol,
-        error: error.message,
-        timestamp: new Date().toISOString()
-      };
-    }
-  }
-  
-  /**
-   * 批量分析多个交易对
-   */
-  async batchAnalyze(symbols, timeframe = this.config.defaultTimeframe) {
-    const results = [];
-    const limitedSymbols = symbols.slice(0, this.config.maxBatchSize);
-    
-    console.error(`📊 Batch analyzing ${limitedSymbols.length} symbols...`);
-    
-    for (const symbol of limitedSymbols) {
-      try {
-        const result = await this.analyze(symbol, timeframe);
-        results.push(result);
-      } catch (error) {
-        results.push({
-          symbol,
-          success: false,
-          error: error.message,
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-    
-    const successful = results.filter(r => r.success);
-    const buySignals = successful.filter(r => r.compositeSignal?.signal === 'BUY');
-    const sellSignals = successful.filter(r => r.compositeSignal?.signal === 'SELL');
-    
-    // 计算最佳机会
-    const topOpportunities = buySignals
-      .map(r => ({
-        symbol: r.symbol,
-        action: r.compositeSignal.signal,
-        confidence: r.compositeSignal.confidence,
-        riskScore: r.riskAssessment.score,
-        score: r.compositeSignal.confidence * (1 - r.riskAssessment.score / 100) * 10,
-        reason: r.compositeSignal.reason
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
-    
-    return {
-      success: true,
-      timestamp: new Date().toISOString(),
-      totalSymbols: symbols.length,
-      analyzedSymbols: limitedSymbols.length,
-      successfulAnalyses: successful.length,
-      failedAnalyses: results.length - successful.length,
-      summary: {
-        buySignals: buySignals.length,
-        sellSignals: sellSignals.length,
-        holdSignals: successful.length - buySignals.length - sellSignals.length,
-        averageConfidence: buySignals.length > 0 
-          ? buySignals.reduce((sum, r) => sum + r.compositeSignal.confidence, 0) / buySignals.length
-          : 0,
-        topOpportunities
-      },
-      results: successful,
-      errors: results.filter(r => !r.success).map(r => ({ symbol: r.symbol, error: r.error }))
-    };
-  }
-  
-  /**
-   * 生成综合信号
-   */
-  generateCompositeSignal(rsiResult, macdResult) {
-    if (!rsiResult.success || !macdResult.success) {
-      return {
-        signal: 'NEUTRAL',
-        confidence: 0.3,
-        reason: 'Strategy analysis failed',
-        source: 'ERROR'
-      };
-    }
-    
-    const signals = [
-      { type: rsiResult.signal, confidence: rsiResult.confidence, source: 'RSI' },
-      { type: macdResult.signal, confidence: macdResult.confidence, source: 'MACD' }
-    ];
-    
-    const buySignals = signals.filter(s => s.type === 'BUY');
-    const sellSignals = signals.filter(s => s.type === 'SELL');
-    
-    let compositeSignal = 'NEUTRAL';
-    let compositeConfidence = 0.5;
-    let reason = 'Neutral signal';
-    
-    if (buySignals.length === 2) {
-      compositeSignal = 'BUY';
-      compositeConfidence = (rsiResult.confidence + macdResult.confidence) / 2 * 1.1;
-      reason = 'RSI and MACD both indicate BUY';
-    } else if (sellSignals.length === 2) {
-      compositeSignal = 'SELL';
-      compositeConfidence = (rsiResult.confidence + macdResult.confidence) / 2 * 1.1;
-      reason = 'RSI and MACD both indicate SELL';
-    } else if (buySignals.length === 1 && sellSignals.length === 0) {
-      compositeSignal = buySignals[0].type;
-      compositeConfidence = buySignals[0].confidence * 0.9;
-      reason = `${buySignals[0].source} indicates ${compositeSignal}`;
-    } else if (sellSignals.length === 1 && buySignals.length === 0) {
-      compositeSignal = sellSignals[0].type;
-      compositeConfidence = sellSignals[0].confidence * 0.9;
-      reason = `${sellSignals[0].source} indicates ${compositeSignal}`;
-    } else if (buySignals.length === 1 && sellSignals.length === 1) {
-      compositeSignal = 'NEUTRAL';
-      compositeConfidence = 0.4;
-      reason = 'RSI and MACD signals conflict';
-    }
-    
-    return {
-      signal: compositeSignal,
-      confidence: Math.min(0.95, Math.max(0.3, compositeConfidence)),
-      reason,
-      source: `${rsiResult.strategy}+${macdResult.strategy}`
-    };
-  }
-  
-  /**
-   * 风险评估
-   */
-  assessRisk(marketData, rsiResult, macdResult) {
-    let score = 50; // 基础风险分
-    
-    // 信号一致性风险
-    if (rsiResult.success && macdResult.success && rsiResult.signal !== macdResult.signal) {
-      score += 20;
-    }
-    
-    // 信号强度风险
-    if (rsiResult.success && rsiResult.confidence < 0.6) {
-      score += 10;
-    }
-    if (macdResult.success && macdResult.confidence < 0.6) {
-      score += 10;
-    }
-    
-    // 市场波动性风险（模拟）
-    const priceChange = Math.abs(parseFloat(marketData.priceChange) || 0);
-    if (priceChange > 5) {
-      score += 15;
-    } else if (priceChange > 2) {
-      score += 8;
-    }
-    
-    // 确定风险等级
-    let level, description;
-    if (score >= 70) {
-      level = 'HIGH';
-      description = 'High risk, proceed with caution';
-    } else if (score >= 40) {
-      level = 'MEDIUM';
-      description = 'Medium risk, moderate position size';
-    } else {
-      level = 'LOW';
-      description = 'Low risk, suitable for trading';
-    }
-    
-    return {
-      level,
-      score: Math.min(100, Math.max(0, score)),
-      description,
-      factors: [
-        rsiResult.signal !== macdResult.signal ? 'Signal conflict' : 'Signal consistent',
-        priceChange > 5 ? 'High volatility' : priceChange > 2 ? 'Moderate volatility' : 'Low volatility'
-      ].filter(f => f)
-    };
-  }
-  
-  /**
-   * 生成交易建议
-   */
-  generateRecommendations(signal, riskAssessment) {
-    const recommendations = {
-      action: signal.signal,
-      confidence: signal.confidence,
-      riskLevel: riskAssessment.level,
-      timestamp: new Date().toISOString(),
-      details: []
-    };
-    
-    if (signal.signal === 'BUY') {
-      if (riskAssessment.level === 'LOW') {
-        recommendations.positionSize = 'Medium (15-25%)';
-        recommendations.details.push('Low risk environment, suitable for medium position');
-      } else if (riskAssessment.level === 'MEDIUM') {
-        recommendations.positionSize = 'Small (5-15%)';
-        recommendations.details.push('Medium risk, suggest small position');
-      } else {
-        recommendations.positionSize = 'Very small (<5%) or wait';
-        recommendations.details.push('High risk environment, trade cautiously');
-      }
-      
-      recommendations.stopLoss = riskAssessment.level === 'HIGH' ? '3-5%' : '5-8%';
-      recommendations.takeProfit = riskAssessment.level === 'HIGH' ? '6-10%' : '10-15%';
-      recommendations.timeHorizon = '1-4 weeks';
-      
-      recommendations.details.push(`Stop loss: ${recommendations.stopLoss}`);
-      recommendations.details.push(`Take profit: ${recommendations.takeProfit} (2:1 risk/reward)`);
-      recommendations.details.push(`Time horizon: ${recommendations.timeHorizon}`);
-      
-    } else if (signal.signal === 'SELL') {
-      recommendations.details.push('Sell signal, consider reducing position');
-      recommendations.details.push('Use trailing stop to protect profits');
-    } else {
-      recommendations.details.push('No clear signal, suggest waiting');
-      recommendations.details.push('Wait for clearer trend formation');
-    }
-    
-    recommendations.details.push(`Signal reason: ${signal.reason}`);
-    
-    return recommendations;
-  }
-}
-
-// 命令行接口
-async function main() {
-  const args = process.argv.slice(2);
-  const command = args[0];
-  
-  const signals = new SmartTradingSignals();
-  
-  try {
-    switch (command) {
-      case 'analyze':
-        const symbol = args.find(arg => arg.startsWith('--symbol'))?.split('=')[1] || CONFIG.defaultSymbol;
-        const timeframe = args.find(arg => arg.startsWith('--timeframe'))?.split('=')[1] || CONFIG.defaultTimeframe;
-        
-        const result = await signals.analyze(symbol, timeframe);
-        console.log(JSON.stringify(result, null, 2));
-        break;
-        
-      case 'batch':
-        const symbolsArg = args.find(arg => arg.startsWith('--symbols'))?.split('=')[1];
-        if (!symbolsArg) {
-          throw new Error('Missing --symbols parameter');
-        }
-        const symbols = symbolsArg.split(',');
-        const batchTimeframe = args.find(arg => arg.startsWith('--timeframe'))?.split('=')[1] || CONFIG.defaultTimeframe;
-        
-        const batchResult = await signals.batchAnalyze(symbols, batchTimeframe);
-        console.log(JSON.stringify(batchResult, null, 2));
-        break;
-        
-      case 'test':
-        // 测试OKX CLI连接
-        console.error('Testing OKX CLI connection...');
-        const testResult = await OKXCommand.execute('market', ['ticker', '--symbol', 'BTC/USDT']);
-        console.log(JSON.stringify({ success: true, testResult }, null, 2));
-        break;
-        
-      default:
-        console.log(JSON.stringify({
-          error: 'Unknown command',
-          availableCommands: ['analyze', 'batch', 'test'],
-          usage: {
-            analyze: 'node smart-trading-signals.js analyze --symbol=BTC/USDT --timeframe=1h',
-            batch: 'node smart-trading-signals.js batch --symbols=BTC/USDT,ETH/USDT --timeframe=1h',
-            test: 'node smart-trading-signals.js test'
-          }
-        }, null, 2));
-    }
-  } catch (error) {
-    console.log(JSON.stringify({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    }, null, 2));
-    process.exit(1);
-  }
-}
-
-// 如果是直接执行，运行主函数
-if (require.main === module) {
-  main().catch(error => {
-    console.error('Fatal error:', error);
-    process.exit(1);
-  });
-}
-
-// 导出模块
-module.exports = {
-  OKXCommand,
-  RSIStrategy,
-  MACDStrategy,
-  SmartTradingSignals
-};
-```
-
-### 安装脚本：`install.sh`
-```bash
-#!/bin/bash
-
-echo "🔧 Installing Smart Trading Signals Skill..."
-
-# 检查Node.js
-if ! command -v node &> /dev/null; then
-    echo "❌ Node.js is not installed. Please install Node.js 16+ first."
-    exit 1
-fi
-
-# 检查OKX CLI
-if ! command -v okx &> /dev/null; then
-    echo "⚠️  OKX CLI is not installed. Installing..."
-    npm install -g @okx/cli
-fi
-
-# 创建技能目录
-SKILL_DIR="$HOME/.okx/skills/smart-trading-signals"
-mkdir -p "$SKILL_DIR"
-
-# 复制技能文件
-cp smart-trading-signals.js "$SKILL_DIR/"
-chmod +x "$SKILL_DIR/smart-trading-signals.js"
-
-# 创建包装脚本
-cat > "$SKILL_DIR/okx-skill-wrapper" << 'EOF'
-#!/bin/bash
-# OKX技能包装器
-node "$(dirname "$0")/smart-trading-signals.js" "$@"
-EOF
-
-chmod +x "$SKILL_DIR/okx-skill-wrapper"
-
-# 创建符号链接（如果OKX CLI支持技能目录）
-if [ -d "$HOME/.okx/bin" ]; then
-    ln -sf "$SKILL_DIR/okx-skill-wrapper" "$HOME/.okx/bin/okx-smart-trading-signals"
-fi
-
-echo "✅ Installation complete!"
-echo ""
-echo "📋 Usage:"
-echo "  okx-smart-trading-signals analyze --symbol=BTC/USDT"
-echo "  okx-smart-trading-signals batch --symbols=BTC/USDT,ETH/USDT"
-echo ""
-echo "⚠️  Security reminder:"
-echo "  - Store API keys in environment variables"
-echo "  - Use read-only API keys when possible"
-echo "  - Never commit API keys to version control"
-```
-
-## 🎯 使用示例
-
-### 1. 直接使用Node.js执行
+### 基本命令
 ```bash
 # 分析单个交易对
-node smart-trading-signals.js analyze --symbol=BTC/USDT --timeframe=1h
-
-# 批量分析
-node smart-trading-signals.js batch --symbols=BTC/USDT,ETH/USDT,SOL/USDT
-
-# 测试连接
-node smart-trading-signals.js test
-```
-
-### 2. 通过OKX CLI集成（如果支持）
-```bash
-# 假设OKX CLI支持技能插件
 okx skill smart-trading-signals analyze --symbol BTC/USDT
 
-# 或通过包装器
-okx-smart-trading-signals analyze --symbol BTC/USDT
+# 批量分析多个交易对
+okx skill smart-trading-signals batch --symbols BTC/USDT,ETH/USDT,SOL/USDT
+
+# 获取详细风险评估
+okx skill smart-trading-signals risk --symbol BTC/USDT
 ```
 
-### 3. 作为模块使用
-```javascript
-const { SmartTradingSignals } = require('./smart-trading-signals.js');
-
-const signals = new SmartTradingSignals();
-
-// 分析单个交易对
-signals.analyze('BTC/USDT', '1h').then(result => {
-  console.log('Analysis result:', result);
-});
-
-// 批量分析
-signals.batchAnalyze(['BTC/USDT', 'ETH/USDT', 'SOL/USDT']).then(result => {
-  console.log('Batch analysis result:', result);
-});
-```
+### 参数说明
+- `--symbol`: 交易对符号 (默认: BTC/USDT)
+- `--symbols`: 交易对列表，逗号分隔
+- `--timeframe`: 时间周期 (默认: 1h, 可选: 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w)
+- `--strategy`: 分析策略 (默认: ALL, 可选: RSI, MACD, ALL)
+- `--risk-tolerance`: 风险容忍度 (默认: medium, 可选: low, medium, high)
 
 ## 📊 输出示例
 
@@ -818,132 +79,98 @@ signals.batchAnalyze(['BTC/USDT', 'ETH/USDT', 'SOL/USDT']).then(result => {
 {
   "success": true,
   "symbol": "BTC/USDT",
-  "timeframe": "1h",
-  "currentPrice": "42500.50",
-  "priceChange": "2.5",
-  "volume": "1250.75",
-  "strategies": {
-    "RSI": {
-      "success": true,
-      "strategy": "RSI",
-      "signal": "BUY",
-      "confidence": 0.85,
-      "reason": "RSI oversold (28.50 < 30)",
-      "value": "28.50",
-      "timestamp": "2024-01-15T10:30:00.000Z"
-    },
-    "MACD": {
-      "success": true,
-      "strategy": "MACD",
-      "signal": "BUY",
-      "confidence": 0.78,
-      "reason": "MACD golden cross (MACD: 0.0152 > Signal: 0.0128)",
-      "values": {
-        "macd": "0.0152",
-        "signal": "0.0128",
-        "histogram": "0.0024"
-      },
-      "timestamp": "2024-01-15T10:30:00.000Z"
-    }
-  },
-  "compositeSignal": {
-    "signal": "BUY",
-    "confidence": 0.82,
-    "reason": "RSI and MACD both indicate BUY",
-    "source": "RSI+MACD"
-  },
-  "riskAssessment": {
-    "level": "LOW",
-    "score": 35,
-    "description": "Low risk, suitable for trading",
-    "factors": [
-      "Signal consistent",
-      "Low volatility"
-    ]
-  },
-  "recommendations": {
-    "action": "BUY",
-    "confidence": 0.82,
-    "riskLevel": "LOW",
-    "positionSize": "Medium (15-25%)",
-    "stopLoss": "5-8%",
-    "takeProfit": "10-15%",
-    "timeHorizon": "1-4 weeks",
-    "details": [
-      "Low risk environment, suitable for medium position",
-      "Stop loss: 5-8%",
-      "Take profit: 10-15% (2:1 risk/reward)",
-      "Time horizon: 1-4 weeks",
-      "Signal reason: RSI and MACD both indicate BUY"
-    ],
-    "timestamp": "2024-01-15T10:30:00.000Z"
-  },
-  "summary": {
-    "action": "BUY",
-    "confidence": "82.0%",
-    "riskLevel": "LOW",
-    "reason": "RSI and MACD both indicate BUY"
-  },
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "dataSource": "OKX CLI"
+  "signal": "BUY",
+  "confidence": 82,
+  "riskLevel": "LOW",
+  "recommendation": "双指标确认买入信号，建议中等仓位",
+  "details": {
+    "RSI": "超卖区域 (28.5)",
+    "MACD": "金叉确认",
+    "riskFactors": ["低波动性", "趋势明确"]
+  }
 }
 ```
 
-## 🔒 安全说明
-
-### API凭证安全处理
-1. **环境变量（推荐）**
-   ```bash
-   export OKX_API_KEY="your_key"
-   export OKX_API_SECRET="your_secret"
-   export OKX_PASSPHRASE="your_phrase"
-   ```
-
-2. **配置文件（加密存储）**
-   ```bash
-   # 使用系统密钥环或加密文件
-   okx config set --encrypt
-   ```
-
-3. **临时参数（不推荐生产环境）**
-   ```bash
-   okx --api-key=xxx --api-secret=xxx --passphrase=xxx market ticker
-   ```
-
-### 安全最佳实践
-- ✅ 使用只读API权限
-- ✅ 设置IP白名单
-- ✅ 定期轮换密钥
-- ✅ 监控API使用情况
-- ❌ 不在代码中硬编码密钥
-- ❌ 不提交`.env`文件到Git
-- ❌ 不在日志中输出敏感信息
-
-## 🧪 测试验证
-
-### 1. 功能测试
-```bash
-# 测试OKX CLI连接
-node smart-trading-signals.js test
-
-# 测试单个分析
-node smart-trading-signals.js analyze --symbol=BTC/USDT
-
-# 测试批量分析
-node smart-trading-signals.js batch --symbols=BTC/USDT,ETH/USDT
+### 批量分析输出
+```json
+{
+  "success": true,
+  "timestamp": "2024-01-15T10:30:00Z",
+  "summary": {
+    "totalAnalyzed": 10,
+    "buySignals": 3,
+    "sellSignals": 1,
+    "holdSignals": 6,
+    "topOpportunities": [
+      {"symbol": "SOL/USDT", "action": "STRONG_BUY", "confidence": 85},
+      {"symbol": "ETH/USDT", "action": "BUY", "confidence": 78}
+    ]
+  }
+}
 ```
 
-### 2. 集成测试
-```bash
-# 验证与OKX CLI的集成
-okx market ticker --symbol BTC/USDT
-okx market indicator --symbol BTC/USDT --indicator RSI --period 14
+## 🔧 技术实现
 
-# 验证技能输出格式
-node smart-trading-signals.js analyze --symbol=BTC/USDT | jq '.success'
-```
+### 依赖技能
+- **okx-cex-market**: 获取实时市场数据
+- **okx-cex-trade**: 执行交易操作（可选）
 
-## 📝 许可证
+### 算法原理
+1. **数据获取**: 通过okx-cex-market获取实时价格和K线数据
+2. **指标计算**: 计算RSI和MACD技术指标
+3. **信号生成**: 基于双指标交叉验证生成交易信号
+4. **风险评估**: 分析市场波动性和信号一致性
+5. **建议输出**: 提供仓位管理和风险管理建议
+
+### 策略详情
+- **RSI策略**: 14日周期，超卖(<30)买入，超买(>70)卖出
+- **MACD策略**: 快线12，慢线26，信号线9，金叉买入，死叉卖出
+- **综合信号**: 双指标一致时增强信号，冲突时降低置信度
+
+## ⚠️ 风险提示
+
+### 交易风险
+- 本技能提供的信号仅供参考，不构成投资建议
+- 加密货币交易存在高风险，可能损失全部本金
+- 请根据自身风险承受能力谨慎决策
+
+### 使用限制
+- 需要有效的OKX API密钥
+- 依赖网络连接和OKX服务可用性
+- 历史表现不代表未来收益
+
+## 📞 支持与反馈
+
+### 问题报告
+如遇到问题或需要技术支持，请通过以下方式联系：
+- GitHub Issues: https://github.com/Lobster-Tempo/trading-strategy-skill/issues
+- 邮箱: yu230650@github.com
+
+### 功能建议
+欢迎提出功能改进建议或新策略需求。
+
+## 📝 更新日志
+
+### v1.0.0 (2024-01-15)
+- 初始版本发布
+- RSI和MACD双策略分析
+- 智能风险评分系统
+- 批量机会扫描功能
+- OKX技能市场集成
+
+## 🔒 安全与隐私
+
+### API密钥安全
+- 本技能不存储用户API密钥
+- 所有API调用通过OKX官方SDK进行
+- 建议使用只读权限的API密钥
+
+### 数据隐私
+- 不收集用户交易数据
+- 所有分析在本地进行
+- 不向第三方共享任何信息
+
+## 📄 许可证
 MIT License
 
 ## ⚠️ 免责声明
@@ -955,4 +182,5 @@ MIT License
 **版本**: 1.0.0  
 **最后更新**: 2024-01-15  
 **状态**: ✅ 生产就绪  
-**兼容性**: OKX CLI v1.0.0+, Node.js 16+
+**开发者**: 菊中菊  
+**依赖**: okx-cex-market, okx-cex-trade
