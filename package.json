@@ -1,7 +1,8 @@
 {
   "name": "smart-trading-signals-skill",
   "version": "1.0.0",
-  "description": "基于OKX CLI的多策略交易信号分析技能，集成RSI和MACD技术指标，提供智能买卖信号和风险管理建议",
+  "description": "OKX CLI集成技能 - 智能交易信号分析，调用OKX命令获取市场数据，执行RSI和MACD双策略分析",
+  "keywords": ["okx", "cli", "trading", "strategy", "analysis", "crypto", "rsi", "macd", "signals", "risk-management"],
   "main": "src/TradingStrategySkill.js",
   "bin": {
     "smart-trading-signals": "./scripts/analyze.js"
@@ -72,11 +73,16 @@
   "okxSkill": {
     "name": "smart-trading-signals",
     "title": "智能交易信号",
-    "description": "基于OKX CLI的多策略交易信号分析技能",
+    "description": "调用OKX CLI命令的多策略交易信号分析",
     "version": "1.0.0",
     "category": "trading-analysis",
-    "tags": ["trading", "strategy", "analysis", "crypto"],
+    "tags": ["trading", "strategy", "analysis", "crypto", "okx-cli"],
     "requires": ["okx-cli"],
-    "commands": ["analyze", "batch", "history", "backtest"]
+    "commands": ["analyze", "batch", "history", "backtest"],
+    "integration": {
+      "dataSource": "okx-cli",
+      "commandsUsed": ["market ticker", "market candles", "market indicator"],
+      "strategy": "RSI + MACD双指标交叉验证"
+    }
   }
 }
