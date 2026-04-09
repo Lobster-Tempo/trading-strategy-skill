@@ -1,14 +1,22 @@
-# Skill: 智能交易信号
+---
+name: smart-trading-signals
+title: 智能交易信号
+description: 基于OKX CLI的多策略交易信号分析，集成RSI和MACD技术指标，提供智能买卖信号和风险管理建议
+version: 1.0.0
+author: 菊中菊
+category: trading-analysis
+tags:
+  - trading
+  - strategy
+  - analysis
+  - crypto
+  - signals
+  - risk-management
+requires:
+  - okx-cli
+---
 
-## 基本信息
-
-- **Skill ID**: `smart-trading-signals`
-- **标题**: `智能交易信号`
-- **描述**: 基于OKX CLI的多策略交易信号分析，集成RSI和MACD技术指标，提供智能买卖信号和风险管理建议
-- **版本**: `1.0.0`
-- **作者**: 菊中菊
-- **分类**: `trading-analysis`
-- **标签**: `trading`, `strategy`, `analysis`, `crypto`, `signals`, `risk-management`
+# 智能交易信号
 
 ## 功能概述
 
@@ -41,7 +49,7 @@
 
 ### 依赖安装
 ```bash
-npm install trading-strategy-skill
+npm install smart-trading-signals-skill
 ```
 
 ### OKX CLI配置
