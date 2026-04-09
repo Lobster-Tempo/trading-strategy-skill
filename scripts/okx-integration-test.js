@@ -106,7 +106,7 @@ function simulateSkillCommand(args) {
   const skillName = args[0];
   const subcommand = args[1];
   
-  if (skillName !== 'trading-strategy') {
+  if (skillName !== 'smart-trading-signals') {
     return { error: `未知技能: ${skillName}` };
   }
   
@@ -202,7 +202,7 @@ async function runTests() {
   console.log('\n\n2. 测试技能分析');
   console.log('='.repeat(50));
   
-  const analysisResult = simulateOKXCommand('skill', ['trading-strategy', 'analyze', '--symbol=BTC/USDT', '--timeframe=1h', '--strategy=ALL']);
+  const analysisResult = simulateOKXCommand('skill', ['smart-trading-signals', 'analyze', '--symbol=BTC/USDT', '--timeframe=1h', '--strategy=ALL']);
   console.log('🔍 分析结果:');
   console.log(`   信号: ${analysisResult.compositeSignal?.type}`);
   console.log(`   置信度: ${(analysisResult.compositeSignal?.confidence * 100).toFixed(1)}%`);
@@ -213,7 +213,7 @@ async function runTests() {
   console.log('\n\n3. 测试批量分析');
   console.log('='.repeat(50));
   
-  const batchResult = simulateOKXCommand('skill', ['trading-strategy', 'batch', '--symbols=BTC/USDT,ETH/USDT,SOL/USDT', '--timeframe=1h']);
+  const batchResult = simulateOKXCommand('skill', ['smart-trading-signals', 'batch', '--symbols=BTC/USDT,ETH/USDT,SOL/USDT', '--timeframe=1h']);
   console.log('📊 批量分析结果:');
   console.log(`   总交易对: ${batchResult.totalSymbols}`);
   console.log(`   成功分析: ${batchResult.successfulAnalyses}`);
@@ -225,7 +225,7 @@ async function runTests() {
   console.log('\n\n4. 测试回测功能');
   console.log('='.repeat(50));
   
-  const backtestResult = simulateOKXCommand('skill', ['trading-strategy', 'backtest', '--symbol=BTC/USDT', '--strategy=RSI', '--start=2024-01-01', '--end=2024-01-31']);
+  const backtestResult = simulateOKXCommand('skill', ['smart-trading-signals', 'backtest', '--symbol=BTC/USDT', '--strategy=RSI', '--start=2024-01-01', '--end=2024-01-31']);
   console.log('📈 回测结果:');
   console.log(`   总交易: ${backtestResult.results?.totalTrades}`);
   console.log(`   胜率: ${backtestResult.results?.winRate}%`);

@@ -8,7 +8,7 @@ const MACDStrategy = require('./strategies/MACDStrategy');
 
 class TradingStrategySkill {
   constructor(config = {}) {
-    this.name = 'trading-strategy';
+    this.name = 'smart-trading-signals';
     this.version = '1.0.0';
     this.description = '基于OKX CLI的多策略交易信号分析技能';
     

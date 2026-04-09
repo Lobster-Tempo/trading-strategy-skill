@@ -46,7 +46,7 @@ npm run clean
 npm run build
 
 # 创建压缩包
-tar -czf trading-strategy-skill-v1.0.0.tar.gz \
+tar -czf smart-trading-signals-skill-v1.0.0.tar.gz \
   --exclude=node_modules \
   --exclude=.git \
   --exclude=.env \
@@ -58,12 +58,12 @@ tar -czf trading-strategy-skill-v1.0.0.tar.gz \
 创建 `skill-manifest.json`:
 ```json
 {
-  "name": "trading-strategy",
+  "name": "smart-trading-signals",
   "version": "1.0.0",
   "description": "AI交易策略分析技能，提供基于技术指标的智能交易信号和风险管理建议",
   "author": "Your Name <your.email@example.com>",
   "license": "MIT",
-  "repository": "https://github.com/your-username/trading-strategy-skill",
+  "repository": "https://github.com/your-username/smart-trading-signals-skill",
   "keywords": ["trading", "strategy", "crypto", "analysis", "ai", "okx"],
   "main": "src/TradingStrategySkill.js",
   "dependencies": {
@@ -94,7 +94,7 @@ tar -czf trading-strategy-skill-v1.0.0.tar.gz \
 2. 导航到技能市场部分
 3. 点击"发布新技能"
 4. 填写技能信息:
-   - 技能名称: `trading-strategy`
+   - 技能名称: `smart-trading-signals`
    - 显示名称: `交易策略分析`
    - 描述: 提供完整的描述
    - 版本: `1.0.0`
@@ -129,7 +129,7 @@ git push origin v1.0.0
 ```json
 // 更新package.json
 {
-  "name": "@your-username/trading-strategy-skill",
+  "name": "@your-username/smart-trading-signals-skill",
   "version": "1.0.0",
   "publishConfig": {
     "access": "public"
@@ -149,10 +149,10 @@ npm publish
 mkdir -p .openclaw
 cat > .openclaw/skill.json << EOF
 {
-  "name": "trading-strategy",
+  "name": "smart-trading-signals",
   "version": "1.0.0",
   "description": "交易策略分析技能",
-  "install": "npm install @your-username/trading-strategy-skill",
+  "install": "npm install @your-username/smart-trading-signals-skill",
   "entry": "src/TradingStrategySkill.js",
   "config": {
     "requiresApiKey": true,
@@ -189,12 +189,12 @@ if [[ $(echo "$NODE_VERSION < 16.0.0" | bc) -eq 1 ]]; then
 fi
 
 # 创建安装目录
-INSTALL_DIR="$HOME/.trading-strategy-skill"
+INSTALL_DIR="$HOME/.smart-trading-signals-skill"
 mkdir -p "$INSTALL_DIR"
 
 # 下载技能包
 echo "📦 下载技能包..."
-curl -L "https://github.com/your-username/trading-strategy-skill/releases/download/v1.0.0/trading-strategy-skill-v1.0.0.tar.gz" \
+curl -L "https://github.com/your-username/smart-trading-signals-skill/releases/download/v1.0.0/smart-trading-signals-skill-v1.0.0.tar.gz" \
   -o "$INSTALL_DIR/skill.tar.gz"
 
 # 解压
@@ -225,8 +225,8 @@ chmod +x "$INSTALL_DIR/start.sh"
 
 # 创建符号链接
 if [ -d "$HOME/.local/bin" ]; then
-    ln -sf "$INSTALL_DIR/start.sh" "$HOME/.local/bin/trading-strategy"
-    echo "✅ 已创建命令别名: trading-strategy"
+    ln -sf "$INSTALL_DIR/start.sh" "$HOME/.local/bin/smart-trading-signals"
+    echo "✅ 已创建命令别名: smart-trading-signals"
 fi
 
 echo "🎉 安装完成！"
@@ -236,7 +236,7 @@ echo "  cd $INSTALL_DIR"
 echo "  node scripts/analyze.js --symbol BTC/USDT"
 echo ""
 echo "或使用命令别名:"
-echo "  trading-strategy --symbol BTC/USDT"
+echo "  smart-trading-signals --symbol BTC/USDT"
 echo ""
 echo "请先配置OKX API密钥:"
 echo "  nano $INSTALL_DIR/.env"
@@ -262,12 +262,12 @@ if ([version]$nodeVersion -lt [version]"16.0.0") {
 }
 
 # 创建安装目录
-$installDir = "$env:USERPROFILE\.trading-strategy-skill"
+$installDir = "$env:USERPROFILE\.smart-trading-signals-skill"
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 
 # 下载技能包
 Write-Host "📦 下载技能包..." -ForegroundColor Yellow
-$url = "https://github.com/your-username/trading-strategy-skill/releases/download/v1.0.0/trading-strategy-skill-v1.0.0.zip"
+$url = "https://github.com/your-username/smart-trading-signals-skill/releases/download/v1.0.0/smart-trading-signals-skill-v1.0.0.zip"
 $output = "$installDir\skill.zip"
 Invoke-WebRequest -Uri $url -OutFile $output
 
@@ -295,7 +295,7 @@ cd /d "$installDir"
 node scripts\analyze.js %*
 "@
 
-Set-Content -Path "$installDir\trading-strategy.bat" -Value $startScript
+Set-Content -Path "$installDir\smart-trading-signals.bat" -Value $startScript
 
 # 添加到PATH
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -311,7 +311,7 @@ Write-Host "  cd $installDir"
 Write-Host "  node scripts\analyze.js --symbol BTC/USDT"
 Write-Host ""
 Write-Host "或使用命令别名:" -ForegroundColor Cyan
-Write-Host "  trading-strategy --symbol BTC/USDT"
+Write-Host "  smart-trading-signals --symbol BTC/USDT"
 Write-Host ""
 Write-Host "请先配置OKX API密钥:" -ForegroundColor Cyan
 Write-Host "  编辑 $installDir\.env 文件"

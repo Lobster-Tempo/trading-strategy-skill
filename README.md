@@ -1,4 +1,4 @@
-# 🎯 交易策略技能 (Trading Strategy Skill)
+# 🎯 交易策略技能 (Smart Trading Signals Skill)
 
 一个专业的AI交易策略分析技能，为加密货币交易提供基于技术指标的智能分析和交易建议。支持RSI、MACD、移动平均线等多种策略，集成OKX市场数据。
 
@@ -22,8 +22,8 @@
 ### 安装
 ```bash
 # 克隆仓库
-git clone https://github.com/your-username/trading-strategy-skill.git
-cd trading-strategy-skill
+git clone https://github.com/your-username/smart-trading-signals-skill.git
+cd smart-trading-signals-skill
 
 # 安装依赖
 npm install
@@ -243,7 +243,7 @@ const skill = new TradingStrategySkill({
 ## 📁 项目结构
 
 ```
-trading-strategy-skill/
+smart-trading-signals-skill/
 ├── src/
 │   ├── TradingStrategySkill.js     # 技能主类
 │   ├── strategies/
@@ -371,7 +371,7 @@ npm run test:coverage
 
 如有问题或建议，请：
 1. 查看[常见问题解答](docs/FAQ.md)
-2. 提交[Issue](https://github.com/your-username/trading-strategy-skill/issues)
+2. 提交[Issue](https://github.com/your-username/smart-trading-signals-skill/issues)
 3. 加入[Discord社区](https://discord.gg/your-community)
 
 ## ⚠️ 免责声明
