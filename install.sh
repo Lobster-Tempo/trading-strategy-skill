@@ -1,63 +1,62 @@
 #!/bin/bash
 
-# 交易策略技能安装脚本
+echo "🔧 Installing Smart Trading Signals Skill..."
 
-set -e
-
-echo "🚀 开始安装交易策略技能..."
-
-# 检查Node.js版本
+# 检查Node.js
 if ! command -v node &> /dev/null; then
-    echo "❌ 请先安装Node.js (>=16.0.0)"
-    echo "   访问: https://nodejs.org/"
+    echo "❌ Node.js is not installed. Please install Node.js 16+ first."
     exit 1
 fi
 
-NODE_VERSION=$(node -v | cut -d'v' -f2)
-if [[ $(echo "$NODE_VERSION < 16.0.0" | bc) -eq 1 ]]; then
-    echo "❌ Node.js版本过低，请升级到16.0.0或更高版本"
-    exit 1
+# 检查OKX CLI
+if ! command -v okx &> /dev/null; then
+    echo "⚠️  OKX CLI is not installed. Installing..."
+    npm install -g @okx/cli
 fi
 
-# 创建安装目录
-INSTALL_DIR="${1:-$HOME/.trading-strategy-skill}"
-mkdir -p "$INSTALL_DIR"
+# 创建技能目录
+SKILL_DIR="$HOME/.okx/skills/smart-trading-signals"
+mkdir -p "$SKILL_DIR"
 
-echo "📦 复制文件到 $INSTALL_DIR..."
-cp -r . "$INSTALL_DIR/"
-cd "$INSTALL_DIR"
+# 复制技能文件
+cp smart-trading-signals.js "$SKILL_DIR/"
+chmod +x "$SKILL_DIR/smart-trading-signals.js"
 
-echo "🔧 安装依赖..."
-npm install --production
-
-# 创建环境配置
-if [ ! -f ".env" ]; then
-    echo "⚙️ 创建环境配置..."
-    cp .env.example .env
-    echo ""
-    echo "✅ 安装完成！"
-    echo ""
-    echo "📋 下一步："
-    echo "1. 编辑 $INSTALL_DIR/.env 文件配置OKX API密钥"
-    echo "2. 运行测试: node scripts/analyze.js --symbol BTC/USDT"
-    echo ""
-else
-    echo "✅ 安装完成！"
-    echo ""
-    echo "📋 使用方法："
-    echo "  cd $INSTALL_DIR"
-    echo "  node scripts/analyze.js --symbol BTC/USDT"
-    echo ""
-fi
-
-# 创建快捷命令
-if [ -d "$HOME/.local/bin" ]; then
-    cat > "$HOME/.local/bin/trading-strategy" << 'EOF'
+# 创建包装脚本
+cat > "$SKILL_DIR/okx-skill-wrapper" << 'EOF'
 #!/bin/bash
-cd "$HOME/.trading-strategy-skill"
-node scripts/analyze.js "$@"
+# OKX技能包装器
+node "$(dirname "$0")/smart-trading-signals.js" "$@"
 EOF
-    chmod +x "$HOME/.local/bin/trading-strategy"
-    echo "🎯 已创建快捷命令: trading-strategy"
-    echo "   使用: trading-strategy --symbol BTC/USDT"
+
+chmod +x "$SKILL_DIR/okx-skill-wrapper"
+
+# 创建符号链接（如果OKX CLI支持技能目录）
+if [ -d "$HOME/.okx/bin" ]; then
+    ln -sf "$SKILL_DIR/okx-skill-wrapper" "$HOME/.okx/bin/okx-smart-trading-signals"
 fi
+
+echo "✅ Installation complete!"
+echo ""
+echo "📋 Usage:"
+echo "  okx-smart-trading-signals analyze --symbol=BTC/USDT"
+echo "  okx-smart-trading-signals batch --symbols=BTC/USDT,ETH/USDT"
+echo ""
+echo "⚠️  Security reminder:"
+echo "  - Store API keys in environment variables"
+echo "  - Use read-only API keys when possible"
+echo "  - Never commit API keys to version control"
+echo ""
+echo "🔒 API Credential Security:"
+echo "  Method 1 (Recommended): Environment variables"
+echo "    export OKX_API_KEY='your_key'"
+echo "    export OKX_API_SECRET='your_secret'"
+echo "    export OKX_PASSPHRASE='your_passphrase'"
+echo ""
+echo "  Method 2: OKX CLI config"
+echo "    okx config set api_key=your_key"
+echo "    okx config set api_secret=your_secret"
+echo "    okx config set passphrase=your_passphrase"
+echo ""
+echo "  Method 3: Command line (temporary)"
+echo "    okx --api-key=xxx --api-secret=xxx --passphrase=xxx market ticker"

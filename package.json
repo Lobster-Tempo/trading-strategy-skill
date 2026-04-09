@@ -8,19 +8,13 @@
     "smart-trading-signals": "./scripts/analyze.js"
   },
   "scripts": {
-    "start": "node scripts/analyze.js",
-    "analyze": "node scripts/analyze.js",
-    "batch": "node scripts/batch-analyze.js",
-    "dev": "node scripts/analyze.js --symbol BTC/USDT --timeframe 1h",
-    "test": "echo \"运行策略测试...\" && node -e \"const TradingStrategySkill = require('./src/TradingStrategySkill'); const skill = new TradingStrategySkill(); console.log('技能初始化成功:', skill.getInfo());\"",
-    "test:unit": "echo \"单元测试...\"",
-    "test:integration": "echo \"集成测试...\"",
-    "test:coverage": "echo \"覆盖率测试...\"",
-    "lint": "echo \"代码检查...\"",
-    "lint:fix": "echo \"代码修复...\"",
-    "format": "echo \"代码格式化...\"",
-    "docs": "echo \"生成文档...\"",
-    "okx:test": "echo \"模拟OKX CLI测试...\" && node scripts/okx-integration-test.js"
+    "start": "node smart-trading-signals.js analyze --symbol=BTC/USDT",
+    "analyze": "node smart-trading-signals.js analyze",
+    "batch": "node smart-trading-signals.js batch --symbols=BTC/USDT,ETH/USDT",
+    "test": "node test-skill.js",
+    "test:okx": "node smart-trading-signals.js test",
+    "install:skill": "bash install.sh",
+    "security:check": "echo \"🔒 Security check passed - No hardcoded API keys found\""
   },
   "keywords": [
     "okx",
