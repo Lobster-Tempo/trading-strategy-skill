@@ -1,455 +1,413 @@
 ---
 name: trading-strategy
-description: "AI交易策略分析技能，提供基于技术指标的智能交易信号和风险管理建议。支持RSI、MACD、移动平均线等多种策略，集成OKX市场数据，为加密货币交易提供专业分析。"
+title: 智能交易信号
+description: "基于OKX CLI的多策略交易信号分析技能，集成RSI和MACD技术指标，提供智能买卖信号和风险管理建议。"
 ---
 
-# 交易策略技能 (Trading Strategy Skill)
+# 智能交易信号
 
-专业的AI交易策略分析技能，为加密货币交易提供基于技术指标的智能分析和交易建议。
+基于OKX CLI的多策略交易信号分析技能，集成RSI和MACD技术指标，提供智能买卖信号和风险管理建议。
 
-## 🎯 功能特点
+## 🎯 核心优势
 
-### 核心功能
-- **多策略分析**: 支持RSI、MACD、移动平均线等多种技术指标策略
-- **实时市场数据**: 集成OKX API获取实时价格和K线数据
-- **智能信号生成**: 基于策略逻辑自动生成买卖信号
-- **风险管理**: 内置风险评估和仓位管理建议
-- **绩效预测**: 基于历史数据的收益和成功率预测
+### 差异化功能（区别于 okx-cex-market）
+- **多策略组合分析**：RSI + MACD双指标验证，提高信号准确性
+- **智能风险评分**：基于波动率和市场状况的动态风险评估
+- **批量机会扫描**：同时分析多个币种，自动筛选最佳交易机会
+- **个性化参数配置**：支持用户自定义策略参数和风险偏好
+- **交易信号历史**：记录和分析历史信号表现，持续优化策略
 
-### 高级功能
-- **批量分析**: 同时分析多个交易对，找出最佳机会
-- **数据质量评估**: 自动评估数据可靠性
-- **历史记录**: 保存分析历史，支持回溯和统计
-- **可配置策略**: 灵活调整策略参数以适应不同市场
+### 技术特点
+- **完全集成OKX CLI**：使用官方`okx market`命令获取实时数据
+- **轻量级设计**：无需外部API密钥，直接使用平台环境
+- **实时计算**：基于最新市场数据的即时信号生成
+- **可扩展架构**：易于添加新策略和技术指标
 
 ## 📋 使用场景
 
 ### 触发条件
-当用户询问以下类型问题时触发：
-- "分析BTC的RSI指标"
-- "ETH现在是否超买？"
-- "给我SOL的交易信号"
-- "检查BNB的技术分析"
+当用户需要技术分析信号时触发：
+- "分析BTC的技术指标"
+- "ETH的买卖信号是什么？"
+- "扫描当前最佳交易机会"
+- "检查SOL的风险等级"
 - "批量分析前10大币种"
 - "生成交易策略报告"
-- "风险评估和仓位建议"
 
-### 不适用场景
-- 基本面分析（财务报表、新闻事件等）
-- 情绪分析（社交媒体情绪、市场情绪）
-- 高频交易策略（毫秒级交易）
-- 非法或高风险交易建议
+### 输出格式
+```json
+{
+  "symbol": "BTC/USDT",
+  "timeframe": "1h",
+  "strategies": {
+    "RSI": {
+      "value": 65.2,
+      "signal": "NEUTRAL",
+      "strength": 0.45
+    },
+    "MACD": {
+      "histogram": 12.5,
+      "signal": "BULLISH",
+      "crossover": "POSITIVE"
+    }
+  },
+  "composite_signal": "BUY",
+  "confidence": 0.72,
+  "risk_score": 35,
+  "recommendation": "中等仓位买入，设置4%止损",
+  "opportunity_rank": 8.5
+}
+```
 
 ## 🚀 快速开始
 
-### 安装
+### 安装（OKX CLI集成）
 ```bash
-# 克隆仓库
-git clone https://github.com/your-username/trading-strategy-skill.git
+# 技能已集成到OKX CLI环境
+# 无需额外安装，直接使用以下命令：
 
-# 安装依赖
-cd trading-strategy-skill
-npm install
-
-# 配置环境变量（可选）
-cp .env.example .env
-# 编辑.env文件，添加OKX API密钥
-```
-
-### 基本使用
-```javascript
-const TradingStrategySkill = require('./src/TradingStrategySkill');
-
-// 创建技能实例
-const skill = new TradingStrategySkill({
-  defaultSymbol: 'BTC/USDT',
-  defaultTimeframe: '1h',
-  defaultStrategy: 'RSI'
-});
-
-// 分析单个交易对
-const result = await skill.analyze({
-  symbol: 'BTC/USDT',
-  timeframe: '4h',
-  strategy: 'RSI'
-});
-
-console.log(JSON.stringify(result, null, 2));
-```
-
-### 命令行使用
-```bash
 # 分析单个币种
-node scripts/analyze.js --symbol BTC/USDT --timeframe 1h --strategy RSI
+okx skill trading-strategy analyze --symbol BTC/USDT --timeframe 1h
 
 # 批量分析
-node scripts/batch-analyze.js --symbols BTC/USDT,ETH/USDT,SOL/USDT
+okx skill trading-strategy batch --symbols BTC/USDT,ETH/USDT,SOL/USDT
 
-# 生成报告
-node scripts/generate-report.js --symbol BTC/USDT --days 7
+# 自定义策略参数
+okx skill trading-strategy analyze --symbol BTC/USDT --strategy RSI --params "period=14,overbought=70,oversold=30"
 ```
 
-## 📊 策略配置
+### 数据获取（使用OKX CLI命令）
+```bash
+# 获取实时价格数据
+okx market ticker --symbol BTC/USDT
 
-### RSI策略配置
-```javascript
-{
-  strategy: 'RSI',
-  strategyParams: {
-    rsiPeriod: 14,      // RSI计算周期
-    overbought: 70,     // 超买阈值
-    oversold: 30,       // 超卖阈值
-    riskLevel: 'medium' // 风险等级
-  }
-}
+# 获取K线数据
+okx market candles --symbol BTC/USDT --timeframe 1h --limit 100
+
+# 获取技术指标
+okx market indicator --symbol BTC/USDT --indicator RSI --period 14
 ```
 
-### MACD策略配置（即将支持）
-```javascript
-{
-  strategy: 'MACD',
-  strategyParams: {
-    fastPeriod: 12,     // 快线周期
-    slowPeriod: 26,     // 慢线周期
-    signalPeriod: 9,    // 信号线周期
-    threshold: 0.001    // 信号阈值
-  }
-}
+## 📊 支持的策略
+
+### RSI策略（相对强弱指数）
+- **原理**：通过比较近期涨幅和跌幅判断超买超卖
+- **OKX CLI集成**：使用`okx market indicator`获取RSI数据
+- **信号逻辑**：
+  - RSI < 30：超卖区域，买入信号
+  - RSI > 70：超买区域，卖出信号
+  - 30 ≤ RSI ≤ 70：中性区域，观望
+- **可配置参数**：
+  - `period`：计算周期（默认14）
+  - `overbought`：超买阈值（默认70）
+  - `oversold`：超卖阈值（默认30）
+
+### MACD策略（移动平均收敛发散）
+- **原理**：通过快慢移动平均线的交叉判断趋势
+- **OKX CLI集成**：使用`okx market indicator`获取MACD数据
+- **信号逻辑**：
+  - MACD线 > 信号线：金叉，买入信号
+  - MACD线 < 信号线：死叉，卖出信号
+  - 柱状图转正：动能增强
+  - 柱状图转负：动能减弱
+- **可配置参数**：
+  - `fast_period`：快线周期（默认12）
+  - `slow_period`：慢线周期（默认26）
+  - `signal_period`：信号线周期（默认9）
+
+### 多策略组合分析
+- **加权评分系统**：RSI和MACD信号加权计算综合评分
+- **冲突解决**：当策略信号冲突时，基于置信度选择主导信号
+- **风险调整**：根据市场波动性调整信号强度
+
+## 🔧 命令参考
+
+### 主要命令
+
+#### `analyze` - 分析单个交易对
+```bash
+okx skill trading-strategy analyze [选项]
+
+选项：
+  --symbol <pair>       交易对（如 BTC/USDT）
+  --timeframe <tf>      时间周期（1m,5m,15m,30m,1h,4h,1d,1w）
+  --strategy <name>     策略名称（RSI, MACD, ALL）
+  --params <string>     策略参数（JSON格式或键值对）
+  --output <format>     输出格式（json, text, table）
 ```
 
-## 🔧 API参考
+**示例：**
+```bash
+# 分析BTC/USDT的RSI指标
+okx skill trading-strategy analyze --symbol BTC/USDT --strategy RSI
 
-### 主要方法
+# 使用自定义参数
+okx skill trading-strategy analyze --symbol ETH/USDT --strategy MACD --params "fast_period=12,slow_period=26,signal_period=9"
 
-#### `analyze(options)`
-分析单个交易对
-
-**参数:**
-```javascript
-{
-  symbol: 'BTC/USDT',           // 交易对
-  timeframe: '1h',              // 时间周期
-  strategy: 'RSI',              // 策略名称
-  dataLimit: 100,               // 数据条数
-  includeMarketData: true,      // 包含市场数据
-  includeRiskAssessment: true,  // 包含风险评估
-  includeRecommendations: true, // 包含交易建议
-  strategyParams: {}            // 策略参数
-}
+# 获取JSON格式输出
+okx skill trading-strategy analyze --symbol SOL/USDT --output json
 ```
 
-**返回:**
-```javascript
-{
-  symbol: 'BTC/USDT',
-  timeframe: '1h',
-  strategy: 'RSI',
-  signal: {
-    type: 'BUY',                // BUY/SELL/HOLD
-    strength: 0.75,             // 信号强度 0-1
-    trend: 'BULLISH',           // 趋势方向
-    crossover: 'OVERSOLD_CROSS' // 交叉类型
-  },
-  confidence: 0.82,             // 分析置信度
-  riskAssessment: { ... },      // 风险评估
-  recommendations: { ... },     // 交易建议
-  performancePrediction: { ... }, // 绩效预测
-  summary: { ... }              // 报告摘要
-}
+#### `batch` - 批量分析多个交易对
+```bash
+okx skill trading-strategy batch [选项]
+
+选项：
+  --symbols <list>      交易对列表（逗号分隔）
+  --timeframe <tf>      时间周期
+  --strategy <name>     策略名称
+  --top <number>        显示前N个最佳机会
+  --min-confidence <n>  最小置信度阈值（0-1）
 ```
 
-#### `analyzeBatch(symbols, options)`
-批量分析多个交易对
+**示例：**
+```bash
+# 批量分析前5大币种
+okx skill trading-strategy batch --symbols BTC/USDT,ETH/USDT,BNB/USDT,SOL/USDT,XRP/USDT
 
-**参数:**
-- `symbols`: 交易对数组，如 `['BTC/USDT', 'ETH/USDT', 'SOL/USDT']`
-- `options`: 同`analyze`方法的选项
+# 筛选高置信度机会
+okx skill trading-strategy batch --symbols "BTC/USDT,ETH/USDT" --min-confidence 0.7
 
-**返回:** 批量分析报告
-
-#### `getAnalysisHistory(filters)`
-获取分析历史
-
-**参数:**
-```javascript
-{
-  symbol: 'BTC/USDT',   // 过滤币种
-  strategy: 'RSI',      // 过滤策略
-  signal: 'BUY',        // 过滤信号
-  startDate: '2024-01-01', // 开始日期
-  endDate: '2024-01-31',   // 结束日期
-  limit: 50             // 限制条数
-}
+# 显示前3个最佳机会
+okx skill trading-strategy batch --symbols "top10" --top 3
 ```
 
-#### `getPerformanceStats()`
-获取性能统计
+#### `history` - 查看信号历史
+```bash
+okx skill trading-strategy history [选项]
 
-#### `reset()`
-重置技能状态
+选项：
+  --symbol <pair>       交易对
+  --strategy <name>     策略名称
+  --days <number>       历史天数
+  --signal <type>       信号类型（BUY, SELL, HOLD）
+```
 
-#### `updateConfig(newConfig)`
-更新配置
+#### `backtest` - 策略回测
+```bash
+okx skill trading-strategy backtest [选项]
 
-### 事件系统
-```javascript
-// 监听分析完成事件
-skill.on('analysisComplete', (result) => {
-  console.log('分析完成:', result.symbol, result.signal.type);
-});
-
-// 监听错误事件
-skill.on('error', (error) => {
-  console.error('分析错误:', error.message);
-});
+选项：
+  --symbol <pair>       交易对
+  --strategy <name>     策略名称
+  --start <date>        开始日期（YYYY-MM-DD）
+  --end <date>          结束日期
+  --initial <amount>    初始资金
 ```
 
 ## 📈 输出示例
 
-### 完整分析报告
-```json
-{
-  "symbol": "BTC/USDT",
-  "timeframe": "4h",
-  "strategy": "RSI",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "currentPrice": 42500.50,
-  "signal": {
-    "type": "BUY",
-    "strength": 0.82,
-    "trend": "BULLISH",
-    "crossover": "OVERSOLD_CROSS",
-    "rsiValue": 28.5
-  },
-  "confidence": 0.85,
-  "marketCondition": {
-    "isOverbought": false,
-    "isOversold": true,
-    "zone": "OVERSOLD",
-    "volatility": 8.2,
-    "momentum": 2.5
-  },
-  "riskAssessment": {
-    "level": "MEDIUM",
-    "score": 0.45,
-    "factors": [
-      "市场波动性: 8.2%",
-      "信号强度: 82%",
-      "分析置信度: 85%",
-      "RSI区域: OVERSOLD"
-    ],
-    "mitigationStrategies": [
-      "使用中等仓位（10-20%资金）",
-      "设置合理止损（4-6%）",
-      "关注关键支撑阻力位"
-    ]
-  },
-  "recommendations": {
-    "action": "BUY",
-    "confidence": 0.85,
-    "entry": {
-      "price": 42500.50,
-      "type": "MARKET",
-      "rationale": "当前市场价格"
-    },
-    "positionSize": {
-      "size": "MEDIUM",
-      "percentage": 0.15,
-      "description": "MEDIUM仓位 (建议15.0%资金)"
-    },
-    "stopLoss": {
-      "level": "5%",
-      "percentage": 5,
-      "rationale": "建议设置在当前价格below 5%的位置"
-    },
-    "takeProfit": {
-      "level": "10%",
-      "percentage": 10,
-      "riskRewardRatio": 2,
-      "rationale": "建议设置在当前价格above 10%的位置 (风险回报比: 2:1)"
-    },
-    "steps": [
-      "1. 在42500.50附近买入",
-      "2. 设置止损位: 价格下跌5%",
-      "3. 设置止盈位: 价格上涨10%",
-      "4. 使用15.0%的资金",
-      "5. 按照监控建议定期检查"
-    ]
-  },
-  "performancePrediction": {
-    "expectedReturn": 0.08,
-    "successProbability": 0.72,
-    "riskAdjustedReturn": 0.0576,
-    "timeframe": "1-4周",
-    "rationale": "基于历史回测和当前市场状况的预测"
-  },
-  "summary": {
-    "symbol": "BTC/USDT",
-    "action": "BUY",
-    "confidence": "85.0%",
-    "riskLevel": "MEDIUM",
-    "expectedReturn": "8.0%",
-    "keyRecommendation": "强烈建议买入，设置合理止损",
-    "timestamp": "2024-01-15T10:30:00Z"
-  }
-}
+### 文本格式输出
+```
+📊 智能交易信号分析报告
+========================================
+
+🔍 基本信息
+   交易对: BTC/USDT
+   时间周期: 1h
+   分析时间: 2024-01-15 10:30:00
+   当前价格: $42,500.50
+
+📈 策略分析
+   RSI指标: 65.2 (NEUTRAL) - 强度: 45%
+   MACD指标: 柱状图 +12.5 (BULLISH) - 金叉确认
+   综合信号: 🟢 BUY
+   置信度: 72%
+
+⚠️ 风险评估
+   风险分数: 35/100 (LOW)
+   波动率: 8.2%
+   市场情绪: BULLISH
+   建议仓位: 中等仓位（15-20%）
+
+💡 交易建议
+   操作: 在$42,500附近买入
+   止损: $40,375 (下跌5%)
+   止盈: $46,750 (上涨10%)
+   风险回报比: 2:1
+
+🎯 机会评分: 8.5/10
+========================================
 ```
 
-### 批量分析报告
+### JSON格式输出
 ```json
 {
-  "timestamp": "2024-01-15T10:35:00Z",
-  "totalSymbols": 5,
-  "successfulAnalyses": 5,
-  "failedAnalyses": 0,
-  "summary": {
-    "buySignals": 2,
-    "sellSignals": 1,
-    "holdSignals": 2,
-    "averageConfidence": 0.76,
-    "topOpportunities": [
-      {
-        "symbol": "BTC/USDT",
-        "action": "BUY",
-        "confidence": 0.85,
-        "signalStrength": 0.82,
-        "score": 0.697
+  "analysis": {
+    "symbol": "BTC/USDT",
+    "timeframe": "1h",
+    "timestamp": "2024-01-15T10:30:00Z",
+    "current_price": 42500.50,
+    "strategies": {
+      "RSI": {
+        "value": 65.2,
+        "signal": "NEUTRAL",
+        "strength": 0.45,
+        "parameters": {
+          "period": 14,
+          "overbought": 70,
+          "oversold": 30
+        }
       },
-      {
-        "symbol": "ETH/USDT",
-        "action": "SELL",
-        "confidence": 0.78,
-        "signalStrength": 0.75,
-        "score": 0.585
+      "MACD": {
+        "macd_line": 125.8,
+        "signal_line": 113.3,
+        "histogram": 12.5,
+        "signal": "BULLISH",
+        "crossover": "POSITIVE",
+        "parameters": {
+          "fast_period": 12,
+          "slow_period": 26,
+          "signal_period": 9
+        }
       }
-    ]
+    },
+    "composite_analysis": {
+      "signal": "BUY",
+      "confidence": 0.72,
+      "weighted_score": 8.5,
+      "primary_strategy": "MACD",
+      "confirmation": "RSI_NEUTRAL_MACD_BULLISH"
+    },
+    "risk_assessment": {
+      "score": 35,
+      "level": "LOW",
+      "factors": {
+        "volatility": 8.2,
+        "liquidity": "HIGH",
+        "trend_strength": 7.8,
+        "market_sentiment": "BULLISH"
+      },
+      "mitigation": [
+        "使用中等仓位（15-20%资金）",
+        "设置5%止损位",
+        "分批建仓降低风险"
+      ]
+    },
+    "recommendations": {
+      "action": "BUY",
+      "entry_range": [42400, 42600],
+      "stop_loss": 40375,
+      "take_profit": 46750,
+      "position_size": "MEDIUM",
+      "risk_reward_ratio": 2.0,
+      "time_horizon": "1-4周"
+    },
+    "metadata": {
+      "opportunity_rank": 8.5,
+      "data_source": "OKX CLI market commands",
+      "calculation_time_ms": 245,
+      "cache_status": "HIT"
+    }
   }
 }
 ```
 
 ## 🔒 风险管理
 
-### 内置风险控制
-1. **仓位管理**: 根据风险等级自动计算建议仓位
-2. **止损建议**: 基于波动率和信号强度计算止损位
-3. **风险等级**: 高/中/低三级风险评估
-4. **数据质量检查**: 自动评估数据可靠性
+### 风险评分系统
+1. **波动率风险**：基于价格波动性计算（0-40分）
+2. **流动性风险**：基于交易量评估（0-30分）
+3. **趋势风险**：基于趋势强度判断（0-20分）
+4. **市场风险**：基于整体市场状况（0-10分）
 
-### 使用建议
-1. **模拟测试**: 在实际交易前进行充分的模拟测试
-2. **风险分散**: 不要将所有资金投入单一策略或币种
-3. **持续监控**: 定期检查策略绩效和市场变化
-4. **资金管理**: 严格遵守仓位管理建议
+### 风险等级
+- **LOW (0-40)**：低风险，适合较大仓位
+- **MEDIUM (41-70)**：中等风险，建议中等仓位
+- **HIGH (71-100)**：高风险，建议小仓位或观望
 
-### 免责声明
-- 本技能提供的分析仅供参考，不构成投资建议
-- 加密货币交易具有高风险，可能损失全部投资
-- 用户应自行承担交易决策的责任
-- 建议在实际交易前咨询专业财务顾问
+### 仓位管理建议
+- **低风险**：20-30%仓位
+- **中等风险**：10-20%仓位
+- **高风险**：5-10%仓位或观望
 
-## 🛠️ 开发指南
+## 🛠️ 技术实现
 
-### 项目结构
+### 数据流架构
 ```
-trading-strategy-skill/
-├── src/
-│   ├── TradingStrategySkill.js     # 技能主类
-│   ├── strategies/                 # 策略实现
-│   │   ├── RSIStrategy.js         # RSI策略
-│   │   ├── MACDStrategy.js        # MACD策略（即将支持）
-│   │   └── BaseStrategy.js        # 策略基类
-│   ├── data/                      # 数据模块
-│   │   ├── MarketDataFetcher.js   # 市场数据获取
-│   │   └── DataCache.js           # 数据缓存
-│   ├── risk/                      # 风险管理
-│   │   ├── RiskAssessor.js        # 风险评估
-│   │   └── PositionManager.js     # 仓位管理
-│   └── utils/                     # 工具函数
-│       ├── indicators.js          # 技术指标计算
-│       └── formatters.js          # 数据格式化
-├── scripts/                       # 脚本文件
-│   ├── analyze.js                 # 分析脚本
-│   ├── batch-analyze.js           # 批量分析脚本
-│   └── backtest.js                # 回测脚本
-├── config/                        # 配置文件
-│   ├── default.json               # 默认配置
-│   └── strategies.json            # 策略配置
-├── test/                          # 测试文件
-│   ├── unit/                      # 单元测试
-│   └── integration/               # 集成测试
-├── docs/                          # 文档
-├── package.json                   # 项目配置
-├── SKILL.md                       # 技能定义（本文件）
-└── README.md                      # 项目说明
+用户请求 → OKX CLI命令 → 市场数据 → 策略计算 → 信号生成 → 结果返回
 ```
 
-### 添加新策略
-1. 在`src/strategies/`目录创建新策略类
-2. 继承`BaseStrategy`基类（如需要）
-3. 实现`analyze`方法和必要的辅助方法
-4. 在`TradingStrategySkill.js`中注册新策略
-5. 添加相应的测试用例
+### OKX CLI集成点
+1. **价格数据**：`okx market ticker`
+2. **K线数据**：`okx market candles`
+3. **技术指标**：`okx market indicator`
+4. **市场状态**：`okx market status`
 
-### 扩展数据源
-1. 创建新的数据获取器类
-2. 实现`getCandles`、`getCurrentPrice`等方法
-3. 在配置中指定使用哪个数据源
-4. 添加数据源特定的错误处理
+### 计算流程
+```python
+# 伪代码示例
+def analyze_symbol(symbol, timeframe, strategy):
+    # 1. 通过OKX CLI获取数据
+    price_data = execute_okx_command(f"market ticker --symbol {symbol}")
+    candle_data = execute_okx_command(f"market candles --symbol {symbol} --timeframe {timeframe}")
+    
+    # 2. 计算技术指标
+    if strategy == "RSI":
+        rsi_value = calculate_rsi(candle_data)
+        signal = generate_rsi_signal(rsi_value)
+    elif strategy == "MACD":
+        macd_data = calculate_macd(candle_data)
+        signal = generate_macd_signal(macd_data)
+    
+    # 3. 风险评估
+    risk_score = assess_risk(price_data, candle_data)
+    
+    # 4. 生成建议
+    recommendation = generate_recommendation(signal, risk_score)
+    
+    return {
+        "signal": signal,
+        "risk_score": risk_score,
+        "recommendation": recommendation
+    }
+```
 
-## 📝 测试
+## 📝 测试验证
 
-### 运行测试
+### 单元测试
 ```bash
-# 运行所有测试
-npm test
+# 测试RSI策略
+okx skill trading-strategy test --strategy RSI
 
-# 运行单元测试
-npm run test:unit
+# 测试MACD策略
+okx skill trading-strategy test --strategy MACD
 
-# 运行集成测试
-npm run test:integration
-
-# 运行性能测试
-npm run test:performance
+# 测试批量分析
+okx skill trading-strategy test --type batch
 ```
 
-### 测试覆盖率
+### 回测验证
 ```bash
-# 生成测试覆盖率报告
-npm run test:coverage
+# 回测过去30天表现
+okx skill trading-strategy backtest --symbol BTC/USDT --days 30 --strategy RSI
+
+# 多策略回测比较
+okx skill trading-strategy backtest --symbol ETH/USDT --strategy ALL --start 2024-01-01 --end 2024-01-31
 ```
 
-## 🔄 更新日志
+## 🔄 更新计划
 
-### v1.0.0 (2024-01-15)
-- 初始版本发布
-- 支持RSI策略分析
-- 集成OKX市场数据
-- 完整的风险管理和交易建议
-- 批量分析功能
+### v1.1.0（计划中）
+- [ ] 添加布林带策略
+- [ ] 支持移动平均线交叉策略
+- [ ] 添加自定义指标组合功能
+- [ ] 优化批量分析性能
 
-### 计划功能
-- [ ] MACD策略支持
-- [ ] 移动平均线策略
-- [ ] 布林带策略
-- [ ] 多策略组合分析
-- [ ] 回测框架
-- [ ] 实时信号推送
-- [ ] 更多交易所支持
+### v1.2.0（规划中）
+- [ ] 添加机器学习信号预测
+- [ ] 支持多时间框架分析
+- [ ] 添加社交情绪分析集成
+- [ ] 优化风险模型
 
 ## 🤝 贡献指南
 
-1. Fork本仓库
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启Pull Request
+欢迎提交Issue和Pull Request来改进这个技能：
 
-### 开发规范
-- 遵循JavaScript Standard Style
-- 编写完整的单元测试
-- 更新相关文档
-- 添加有意义的提交信息
+1. **报告问题**：在GitHub Issues中描述遇到的问题
+2. **建议功能**：提出新的策略或改进建议
+3. **提交代码**：遵循现有的代码风格和测试规范
+4. **更新文档**：确保文档与代码变更同步
 
 ## 📄 许可证
 
@@ -457,17 +415,17 @@ npm run test:coverage
 
 ## 🙏 致谢
 
-- OKX提供的市场数据API
+- OKX提供的CLI工具和市场数据
 - 所有贡献者和用户
-- 开源社区的支持
+- 开源社区的技术支持
 
 ## 📞 支持
 
 如有问题或建议，请：
-1. 查看[常见问题解答](docs/FAQ.md)
-2. 提交[Issue](https://github.com/your-username/trading-strategy-skill/issues)
-3. 加入[Discord社区](https://discord.gg/your-community)
+1. 查看技能文档和使用指南
+2. 提交GitHub Issue
+3. 联系技能开发者
 
 ---
 
-**免责声明**: 交易有风险，投资需谨慎。本技能提供的分析仅供参考，不构成任何投资建议。用户应自行承担交易决策的风险和责任。
+**免责声明**: 交易有风险，投资需谨慎。本技能提供的分析仅供参考，不构成任何投资建议。用户应自行承担交易决策的风险和责任。过去表现不代表未来结果，请在真实交易前进行充分的测试和验证。

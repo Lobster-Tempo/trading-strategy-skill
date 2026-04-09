@@ -1,92 +1,58 @@
 /**
  * 交易策略技能主类
- * 集成多种交易策略，提供统一的接口
+ * 集成OKX CLI的多策略交易信号分析
  */
 
 const RSIStrategy = require('./strategies/RSIStrategy');
-const MarketDataFetcher = require('./data/MarketDataFetcher');
+const MACDStrategy = require('./strategies/MACDStrategy');
 
 class TradingStrategySkill {
   constructor(config = {}) {
+    this.name = 'trading-strategy';
+    this.version = '1.0.0';
+    this.description = '基于OKX CLI的多策略交易信号分析技能';
+    
+    // 默认配置
     this.config = {
-      // 默认配置
       defaultSymbol: config.defaultSymbol || 'BTC/USDT',
       defaultTimeframe: config.defaultTimeframe || '1h',
-      defaultStrategy: config.defaultStrategy || 'RSI',
+      defaultStrategy: config.defaultStrategy || 'ALL',
       cacheEnabled: config.cacheEnabled !== false,
+      cacheTTL: config.cacheTTL || 30000, // 30秒缓存
       logLevel: config.logLevel || 'info',
-      
-      // 策略配置
-      strategies: {
-        RSI: {
-          rsiPeriod: config.rsiPeriod || 14,
-          overbought: config.overbought || 70,
-          oversold: config.oversold || 30
-        }
-      },
-      
-      // 风险管理配置
-      riskManagement: {
-        maxPositionSize: config.maxPositionSize || 0.3, // 最大仓位30%
-        stopLossDefault: config.stopLossDefault || 0.05, // 默认止损5%
-        takeProfitDefault: config.takeProfitDefault || 0.1, // 默认止盈10%
-        riskRewardRatio: config.riskRewardRatio || 2 // 风险回报比
-      }
-    };
-    
-    // 初始化组件
-    this.dataFetcher = new MarketDataFetcher(config.apiConfig);
-    this.strategies = new Map();
-    this.analysisHistory = [];
-    this.performanceMetrics = {
-      totalAnalyses: 0,
-      signalsGenerated: 0,
-      averageConfidence: 0,
-      strategiesUsed: new Set()
+      maxBatchSize: config.maxBatchSize || 10,
+      riskTolerance: config.riskTolerance || 'medium', // low, medium, high
+      ...config
     };
     
     // 初始化策略
-    this.initializeStrategies();
+    this.strategies = {
+      RSI: new RSIStrategy(config.strategies?.RSI),
+      MACD: new MACDStrategy(config.strategies?.MACD)
+    };
     
-    // 日志
-    this.logger = this.createLogger();
+    // 缓存系统
+    this.cache = new Map();
+    this.cacheTimestamps = new Map();
     
-    this.logger.info('交易策略技能初始化完成', {
-      defaultStrategy: this.config.defaultStrategy,
-      defaultSymbol: this.config.defaultSymbol,
-      strategies: Array.from(this.strategies.keys())
-    });
+    // 性能统计
+    this.stats = {
+      totalAnalyses: 0,
+      successfulAnalyses: 0,
+      failedAnalyses: 0,
+      averageResponseTime: 0,
+      cacheHits: 0,
+      cacheMisses: 0
+    };
+    
+    // 初始化日志
+    this.initLogging();
   }
   
   /**
-   * 初始化所有策略
+   * 初始化日志系统
    */
-  initializeStrategies() {
-    // RSI策略
-    const rsiConfig = this.config.strategies.RSI;
-    this.strategies.set('RSI', new RSIStrategy({
-      rsiPeriod: rsiConfig.rsiPeriod,
-      overbought: rsiConfig.overbought,
-      oversold: rsiConfig.oversold,
-      symbol: this.config.defaultSymbol,
-      timeframe: this.config.defaultTimeframe
-    }));
-    
-    // 可以在这里添加更多策略
-    // this.strategies.set('MACD', new MACDStrategy(...));
-    // this.strategies.set('BollingerBands', new BollingerBandsStrategy(...));
-    
-    this.logger.debug('策略初始化完成', {
-      strategyCount: this.strategies.size,
-      strategyNames: Array.from(this.strategies.keys())
-    });
-  }
-  
-  /**
-   * 创建日志器
-   * @returns {Object} 日志器对象
-   */
-  createLogger() {
+  initLogging() {
     const levels = {
       debug: 0,
       info: 1,
@@ -94,935 +60,999 @@ class TradingStrategySkill {
       error: 3
     };
     
-    const currentLevel = levels[this.config.logLevel] || levels.info;
-    
-    return {
-      debug: (message, data) => {
-        if (currentLevel <= levels.debug) {
-          console.log(`[DEBUG] ${message}`, data || '');
-        }
-      },
-      info: (message, data) => {
-        if (currentLevel <= levels.info) {
-          console.log(`[INFO] ${message}`, data || '');
-        }
-      },
-      warn: (message, data) => {
-        if (currentLevel <= levels.warn) {
-          console.warn(`[WARN] ${message}`, data || '');
-        }
-      },
-      error: (message, data) => {
-        if (currentLevel <= levels.error) {
-          console.error(`[ERROR] ${message}`, data || '');
+    this.log = (level, message, data = {}) => {
+      const currentLevel = levels[this.config.logLevel] || 1;
+      const messageLevel = levels[level] || 1;
+      
+      if (messageLevel >= currentLevel) {
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+          timestamp,
+          level: level.toUpperCase(),
+          message,
+          ...data
+        };
+        
+        if (level === 'error') {
+          console.error(JSON.stringify(logEntry));
+        } else if (level === 'warn') {
+          console.warn(JSON.stringify(logEntry));
+        } else {
+          console.log(JSON.stringify(logEntry));
         }
       }
     };
   }
   
   /**
-   * 分析交易对
+   * 分析单个交易对
    * @param {Object} options - 分析选项
    * @returns {Promise<Object>} 分析结果
    */
   async analyze(options = {}) {
     const startTime = Date.now();
+    this.stats.totalAnalyses++;
     
     try {
-      const analysisOptions = this.parseAnalysisOptions(options);
+      // 合并选项
+      const analysisOptions = {
+        symbol: options.symbol || this.config.defaultSymbol,
+        timeframe: options.timeframe || this.config.defaultTimeframe,
+        strategy: options.strategy || this.config.defaultStrategy,
+        dataLimit: options.dataLimit || 100,
+        includeMarketData: options.includeMarketData !== false,
+        includeRiskAssessment: options.includeRiskAssessment !== false,
+        includeRecommendations: options.includeRecommendations !== false,
+        strategyParams: options.strategyParams || {},
+        ...options
+      };
       
-      this.logger.info('开始分析', {
-        symbol: analysisOptions.symbol,
-        timeframe: analysisOptions.timeframe,
-        strategy: analysisOptions.strategy
-      });
+      this.log('info', '开始分析', analysisOptions);
       
-      // 获取市场数据
-      const marketData = await this.fetchMarketData(
-        analysisOptions.symbol,
-        analysisOptions.timeframe,
-        analysisOptions.dataLimit
-      );
+      // 检查缓存
+      const cacheKey = this.generateCacheKey(analysisOptions);
+      if (this.config.cacheEnabled) {
+        const cachedResult = this.getFromCache(cacheKey);
+        if (cachedResult) {
+          this.stats.cacheHits++;
+          this.log('debug', '缓存命中', { cacheKey });
+          return {
+            ...cachedResult,
+            metadata: {
+              ...cachedResult.metadata,
+              cacheHit: true,
+              responseTime: Date.now() - startTime
+            }
+          };
+        }
+        this.stats.cacheMisses++;
+      }
+      
+      // 获取市场数据（模拟OKX CLI调用）
+      const marketData = await this.fetchMarketData(analysisOptions);
+      
+      if (!marketData.success) {
+        throw new Error(`获取市场数据失败: ${marketData.error}`);
+      }
       
       // 执行策略分析
-      const strategyResult = await this.executeStrategy(
-        analysisOptions.strategy,
-        marketData,
+      const strategyResults = await this.executeStrategies(
+        marketData.data, 
         analysisOptions
       );
       
-      // 生成综合报告
-      const report = this.generateReport(
-        strategyResult,
-        marketData,
-        analysisOptions
-      );
+      // 生成综合信号
+      const compositeSignal = this.generateCompositeSignal(strategyResults);
       
-      // 记录分析历史
-      this.recordAnalysis(report);
+      // 风险评估
+      const riskAssessment = analysisOptions.includeRiskAssessment 
+        ? this.assessRisk(strategyResults, marketData.data)
+        : null;
       
-      // 更新性能指标
-      this.updatePerformanceMetrics(report);
+      // 交易建议
+      const recommendations = analysisOptions.includeRecommendations
+        ? this.generateRecommendations(compositeSignal, riskAssessment, analysisOptions)
+        : null;
       
-      const duration = Date.now() - startTime;
-      this.logger.info('分析完成', {
+      // 构建结果
+      const result = {
+        success: true,
         symbol: analysisOptions.symbol,
-        duration: `${duration}ms`,
-        signal: report.signal.type,
-        confidence: report.confidence
-      });
-      
-      return report;
-      
-    } catch (error) {
-      this.logger.error('分析失败', {
-        error: error.message,
-        stack: error.stack
-      });
-      
-      throw error;
-    }
-  }
-  
-  /**
-   * 解析分析选项
-   * @param {Object} options - 原始选项
-   * @returns {Object} 解析后的选项
-   */
-  parseAnalysisOptions(options) {
-    return {
-      symbol: options.symbol || this.config.defaultSymbol,
-      timeframe: options.timeframe || this.config.defaultTimeframe,
-      strategy: options.strategy || this.config.defaultStrategy,
-      dataLimit: options.dataLimit || 100,
-      includeMarketData: options.includeMarketData !== false,
-      includeRiskAssessment: options.includeRiskAssessment !== false,
-      includeRecommendations: options.includeRecommendations !== false,
-      customStrategyParams: options.strategyParams || {}
-    };
-  }
-  
-  /**
-   * 获取市场数据
-   * @param {string} symbol - 交易对
-   * @param {string} timeframe - 时间周期
-   * @param {number} limit - 数据条数
-   * @returns {Promise<Object>} 市场数据
-   */
-  async fetchMarketData(symbol, timeframe, limit) {
-    this.logger.debug('获取市场数据', { symbol, timeframe, limit });
-    
-    try {
-      // 获取K线数据
-      const candles = await this.dataFetcher.getCandles(symbol, timeframe, limit);
-      
-      // 获取当前价格
-      const currentPrice = await this.dataFetcher.getCurrentPrice(symbol);
-      
-      // 获取市场概况
-      const marketOverview = await this.dataFetcher.getMarketOverview(symbol);
-      
-      // 提取价格序列
-      const prices = candles.map(candle => candle.close);
-      
-      return {
-        symbol,
-        timeframe,
-        candles,
-        prices,
-        currentPrice,
-        marketOverview,
+        timeframe: analysisOptions.timeframe,
         timestamp: new Date().toISOString(),
-        dataPoints: candles.length
+        currentPrice: marketData.data.currentPrice,
+        marketCondition: marketData.data.marketCondition,
+        strategies: strategyResults,
+        compositeSignal: compositeSignal,
+        riskAssessment: riskAssessment,
+        recommendations: recommendations,
+        summary: this.generateSummary(compositeSignal, riskAssessment, recommendations),
+        metadata: {
+          analysisTime: Date.now() - startTime,
+          strategiesUsed: Object.keys(strategyResults).filter(k => strategyResults[k].success),
+          dataPoints: marketData.data.prices?.length || 0,
+          cacheKey: cacheKey,
+          cacheHit: false
+        }
       };
       
-    } catch (error) {
-      this.logger.error('获取市场数据失败', {
-        symbol,
-        timeframe,
-        error: error.message
+      // 更新性能统计
+      const responseTime = Date.now() - startTime;
+      this.stats.successfulAnalyses++;
+      this.stats.averageResponseTime = 
+        (this.stats.averageResponseTime * (this.stats.successfulAnalyses - 1) + responseTime) / 
+        this.stats.successfulAnalyses;
+      
+      // 缓存结果
+      if (this.config.cacheEnabled) {
+        this.setCache(cacheKey, result);
+      }
+      
+      this.log('info', '分析完成', {
+        symbol: analysisOptions.symbol,
+        signal: compositeSignal.type,
+        confidence: compositeSignal.confidence,
+        responseTime
       });
       
-      // 如果获取失败，使用最后的价格生成模拟数据
-      if (this.config.cacheEnabled && this.analysisHistory.length > 0) {
-        const lastAnalysis = this.analysisHistory[this.analysisHistory.length - 1];
-        if (lastAnalysis.symbol === symbol) {
-          this.logger.warn('使用缓存数据继续分析', { symbol });
-          return lastAnalysis.marketData;
+      return result;
+      
+    } catch (error) {
+      this.stats.failedAnalyses++;
+      const errorTime = Date.now() - startTime;
+      
+      this.log('error', '分析失败', {
+        error: error.message,
+        options,
+        responseTime: errorTime
+      });
+      
+      return {
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        signal: {
+          type: 'NEUTRAL',
+          confidence: 0,
+          description: '分析失败'
+        },
+        recommendations: {
+          action: 'HOLD',
+          reason: '技术分析暂时不可用'
+        },
+        metadata: {
+          analysisTime: errorTime,
+          error: true
         }
-      }
-      
-      throw new Error(`无法获取 ${symbol} 的市场数据: ${error.message}`);
-    }
-  }
-  
-  /**
-   * 执行策略分析
-   * @param {string} strategyName - 策略名称
-   * @param {Object} marketData - 市场数据
-   * @param {Object} options - 分析选项
-   * @returns {Promise<Object>} 策略结果
-   */
-  async executeStrategy(strategyName, marketData, options) {
-    const strategy = this.strategies.get(strategyName);
-    
-    if (!strategy) {
-      throw new Error(`策略 ${strategyName} 未找到。可用策略: ${Array.from(this.strategies.keys()).join(', ')}`);
-    }
-    
-    this.logger.debug('执行策略', {
-      strategy: strategyName,
-      symbol: marketData.symbol,
-      dataPoints: marketData.dataPoints
-    });
-    
-    // 更新策略配置
-    if (options.customStrategyParams) {
-      strategy.updateConfig(options.customStrategyParams);
-    }
-    
-    // 执行策略分析
-    const strategyResult = strategy.analyze({
-      prices: marketData.prices,
-      timestamp: marketData.timestamp
-    });
-    
-    // 添加额外信息
-    strategyResult.strategyName = strategyName;
-    strategyResult.executionTime = new Date().toISOString();
-    strategyResult.dataQuality = this.assessDataQuality(marketData);
-    
-    return strategyResult;
-  }
-  
-  /**
-   * 评估数据质量
-   * @param {Object} marketData - 市场数据
-   * @returns {Object} 数据质量评估
-   */
-  assessDataQuality(marketData) {
-    const { candles, dataPoints } = marketData;
-    
-    if (dataPoints < 20) {
-      return {
-        score: 0.3,
-        level: 'LOW',
-        issues: ['数据点不足，分析结果可能不准确'],
-        recommendation: '获取更多历史数据'
       };
     }
-    
-    // 检查数据连续性
-    let missingData = 0;
-    for (let i = 1; i < candles.length; i++) {
-      const timeDiff = candles[i].timestamp - candles[i - 1].timestamp;
-      const expectedDiff = 3600000; // 假设1小时K线
-      
-      if (timeDiff > expectedDiff * 1.5) {
-        missingData++;
-      }
-    }
-    
-    const missingRatio = missingData / candles.length;
-    
-    if (missingRatio > 0.1) {
-      return {
-        score: 0.5,
-        level: 'MEDIUM',
-        issues: ['数据存在缺失，可能影响分析准确性'],
-        recommendation: '检查数据源或使用更可靠的数据'
-      };
-    }
-    
-    return {
-      score: 0.9,
-      level: 'HIGH',
-      issues: [],
-      recommendation: '数据质量良好，可以信赖分析结果'
-    };
-  }
-  
-  /**
-   * 生成综合报告
-   * @param {Object} strategyResult - 策略结果
-   * @param {Object} marketData - 市场数据
-   * @param {Object} options - 分析选项
-   * @returns {Object} 综合报告
-   */
-  generateReport(strategyResult, marketData, options) {
-    const report = {
-      // 基本信息
-      symbol: marketData.symbol,
-      timeframe: marketData.timeframe,
-      strategy: strategyResult.strategyName,
-      timestamp: new Date().toISOString(),
-      
-      // 市场数据
-      currentPrice: marketData.currentPrice,
-      marketOverview: options.includeMarketData ? marketData.marketOverview : undefined,
-      
-      // 策略信号
-      signal: strategyResult.signal,
-      confidence: strategyResult.confidence,
-      marketCondition: strategyResult.marketCondition,
-      
-      // 数据质量
-      dataQuality: strategyResult.dataQuality,
-      
-      // 元数据
-      metadata: {
-        analysisId: this.generateAnalysisId(),
-        executionTime: strategyResult.executionTime,
-        dataPoints: marketData.dataPoints,
-        strategyVersion: '1.0.0'
-      }
-    };
-    
-    // 添加风险评估
-    if (options.includeRiskAssessment) {
-      report.riskAssessment = this.generateRiskAssessment(
-        strategyResult,
-        marketData,
-        options
-      );
-    }
-    
-    // 添加交易建议
-    if (options.includeRecommendations) {
-      report.recommendations = this.generateRecommendations(
-        strategyResult,
-        marketData,
-        report.riskAssessment
-      );
-    }
-    
-    // 添加绩效预测
-    report.performancePrediction = this.predictPerformance(
-      strategyResult,
-      marketData
-    );
-    
-    // 添加摘要
-    report.summary = this.generateSummary(report);
-    
-    return report;
-  }
-  
-  /**
-   * 生成风险评估
-   * @param {Object} strategyResult - 策略结果
-   * @param {Object} marketData - 市场数据
-   * @param {Object} options - 分析选项
-   * @returns {Object} 风险评估
-   */
-  generateRiskAssessment(strategyResult, marketData, options) {
-    const { signal, marketCondition, confidence } = strategyResult;
-    const { currentPrice, marketOverview } = marketData;
-    
-    // 基础风险评估
-    let riskScore = strategyResult.riskAssessment?.score || 0.5;
-    let riskLevel = strategyResult.riskAssessment?.level || 'MEDIUM';
-    
-    // 考虑市场波动性
-    if (marketOverview) {
-      const changePercent = Math.abs(marketOverview.changePercent24h);
-      if (changePercent > 10) {
-        riskScore += 0.3;
-        riskLevel = 'HIGH';
-      } else if (changePercent > 5) {
-        riskScore += 0.15;
-        if (riskLevel === 'LOW') riskLevel = 'MEDIUM';
-      }
-    }
-    
-    // 考虑信号强度
-    if (signal.strength > 0.7) {
-      riskScore -= 0.1; // 强信号降低风险
-    } else if (signal.strength < 0.3) {
-      riskScore += 0.1; // 弱信号增加风险
-    }
-    
-    // 考虑置信度
-    riskScore += (0.5 - confidence) * 0.2; // 低置信度增加风险
-    
-    // 确保风险分数在0-1之间
-    riskScore = Math.max(0, Math.min(1, riskScore));
-    
-    // 确定最终风险等级
-    if (riskScore > 0.7) riskLevel = 'HIGH';
-    else if (riskScore > 0.4) riskLevel = 'MEDIUM';
-    else riskLevel = 'LOW';
-    
-    return {
-      score: riskScore,
-      level: riskLevel,
-      factors: [
-        `市场波动性: ${marketOverview?.changePercent24h?.toFixed(2)}%`,
-        `信号强度: ${(signal.strength * 100).toFixed(1)}%`,
-        `分析置信度: ${(confidence * 100).toFixed(1)}%`,
-        `RSI区域: ${marketCondition?.zone || 'UNKNOWN'}`
-      ],
-      mitigationStrategies: this.getRiskMitigationStrategies(riskLevel, signal)
-    };
-  }
-  
-  /**
-   * 获取风险缓解策略
-   * @param {string} riskLevel - 风险等级
-   * @param {Object} signal - 交易信号
-   * @returns {Array} 风险缓解策略
-   */
-  getRiskMitigationStrategies(riskLevel, signal) {
-    const strategies = [];
-    
-    if (riskLevel === 'HIGH') {
-      strategies.push('使用极小仓位（<5%资金）');
-      strategies.push('设置紧密止损（2-3%）');
-      strategies.push('考虑使用期权进行对冲');
-      strategies.push('分批建仓，降低平均成本');
-    } else if (riskLevel === 'MEDIUM') {
-      strategies.push('使用中等仓位（10-20%资金）');
-      strategies.push('设置合理止损（4-6%）');
-      strategies.push('关注关键支撑阻力位');
-      strategies.push('准备应急退出计划');
-    } else {
-      strategies.push('可以正常仓位操作（20-30%资金）');
-      strategies.push('设置基础止损（7-10%）');
-      strategies.push('定期监控仓位');
-    }
-    
-    if (signal.type === 'BUY') {
-      strategies.push('买入后设置移动止损保护利润');
-    } else if (signal.type === 'SELL') {
-      strategies.push('卖出后关注回调买入机会');
-    }
-    
-    return strategies;
-  }
-  
-  /**
-   * 生成交易建议
-   * @param {Object} strategyResult - 策略结果
-   * @param {Object} marketData - 市场数据
-   * @param {Object} riskAssessment - 风险评估
-   * @returns {Object} 交易建议
-   */
-  generateRecommendations(strategyResult, marketData, riskAssessment) {
-    const { signal, confidence } = strategyResult;
-    const { currentPrice } = marketData;
-    
-    const baseRecommendation = strategyResult.recommendation || {};
-    
-    // 根据风险评估调整建议
-    let positionSize = baseRecommendation.suggestedPosition || {};
-    if (riskAssessment) {
-      if (riskAssessment.level === 'HIGH') {
-        positionSize.percentage *= 0.5;
-        positionSize.size = 'VERY_SMALL';
-      } else if (riskAssessment.level === 'MEDIUM') {
-        positionSize.percentage *= 0.75;
-        if (positionSize.size === 'LARGE') positionSize.size = 'MEDIUM';
-      }
-    }
-    
-    // 生成具体建议
-    const recommendations = {
-      action: signal.type,
-      confidence: confidence,
-      entry: {
-        price: currentPrice,
-        type: 'MARKET',
-        rationale: '当前市场价格'
-      },
-      positionSize,
-      stopLoss: baseRecommendation.stopLoss || {
-        level: '5%',
-        percentage: 5,
-        rationale: '默认止损位'
-      },
-      takeProfit: baseRecommendation.takeProfit || {
-        level: '10%',
-        percentage: 10,
-        rationale: '默认止盈位'
-      },
-      timeframe: {
-        shortTerm: '1-3天',
-        mediumTerm: '1-2周',
-        longTerm: '1个月以上'
-      },
-      monitoring: this.getMonitoringRecommendations(signal, riskAssessment)
-    };
-    
-    // 添加具体操作步骤
-    recommendations.steps = this.getActionSteps(signal, recommendations);
-    
-    return recommendations;
-  }
-  
-  /**
-   * 获取监控建议
-   * @param {Object} signal - 交易信号
-   * @param {Object} riskAssessment - 风险评估
-   * @returns {Array} 监控建议
-   */
-  getMonitoringRecommendations(signal, riskAssessment) {
-    const recommendations = [];
-    
-    recommendations.push('每日检查仓位和市场状况');
-    
-    if (riskAssessment?.level === 'HIGH') {
-      recommendations.push('每小时监控价格变化');
-      recommendations.push('设置价格警报');
-    }
-    
-    if (signal.type === 'BUY') {
-      recommendations.push('关注是否突破关键阻力位');
-      recommendations.push('监控成交量变化');
-    } else if (signal.type === 'SELL') {
-      recommendations.push('关注是否跌破关键支撑位');
-      recommendations.push('监控市场情绪变化');
-    }
-    
-    recommendations.push('定期评估策略有效性');
-    
-    return recommendations;
-  }
-  
-  /**
-   * 获取操作步骤
-   * @param {Object} signal - 交易信号
-   * @param {Object} recommendations - 交易建议
-   * @returns {Array} 操作步骤
-   */
-  getActionSteps(signal, recommendations) {
-    const steps = [];
-    
-    if (signal.type === 'BUY') {
-      steps.push(`1. 在${recommendations.entry.price}附近买入`);
-      steps.push(`2. 设置止损位: 价格下跌${recommendations.stopLoss.percentage}%`);
-      steps.push(`3. 设置止盈位: 价格上涨${recommendations.takeProfit.percentage}%`);
-      steps.push(`4. 使用${recommendations.positionSize.percentage * 100}%的资金`);
-      steps.push('5. 按照监控建议定期检查');
-    } else if (signal.type === 'SELL') {
-      steps.push(`1. 在${recommendations.entry.price}附近卖出`);
-      steps.push(`2. 设置止损位: 价格上涨${recommendations.stopLoss.percentage}%`);
-      steps.push(`3. 设置止盈位: 价格下跌${recommendations.takeProfit.percentage}%`);
-      steps.push(`4. 卖出${recommendations.positionSize.percentage * 100}%的持仓`);
-      steps.push('5. 按照监控建议定期检查');
-    } else {
-      steps.push('1. 保持观望，不进行交易');
-      steps.push('2. 继续监控市场状况');
-      steps.push('3. 等待更好的交易机会');
-      steps.push('4. 研究其他潜在交易对');
-    }
-    
-    return steps;
-  }
-  
-  /**
-   * 预测绩效
-   * @param {Object} strategyResult - 策略结果
-   * @param {Object} marketData - 市场数据
-   * @returns {Object} 绩效预测
-   */
-  predictPerformance(strategyResult, marketData) {
-    const { signal, confidence } = strategyResult;
-    
-    if (signal.type === 'HOLD') {
-      return {
-        expectedReturn: 0,
-        successProbability: 0.5,
-        riskAdjustedReturn: 0,
-        timeframe: 'N/A',
-        rationale: '观望策略，无预期收益'
-      };
-    }
-    
-    // 基于历史数据和信号强度预测
-    let expectedReturn = 0.05; // 默认5%
-    let successProbability = 0.6; // 默认60%
-    
-    // 根据信号强度调整
-    expectedReturn *= signal.strength;
-    successProbability = 0.5 + (signal.strength * 0.3);
-    
-    // 根据置信度调整
-    successProbability *= confidence;
-    
-    // 根据市场状况调整
-    if (strategyResult.marketCondition?.isOverbought && signal.type === 'SELL') {
-      expectedReturn += 0.02;
-      successProbability += 0.1;
-    } else if (strategyResult.marketCondition?.isOversold && signal.type === 'BUY') {
-      expectedReturn += 0.02;
-      successProbability += 0.1;
-    }
-    
-    // 计算风险调整后收益
-    const riskAdjustedReturn = expectedReturn * successProbability;
-    
-    return {
-      expectedReturn: Math.min(expectedReturn, 0.2), // 最大20%
-      successProbability: Math.min(successProbability, 0.9), // 最大90%
-      riskAdjustedReturn,
-      timeframe: '1-4周',
-      rationale: '基于历史回测和当前市场状况的预测'
-    };
-  }
-  
-  /**
-   * 生成报告摘要
-   * @param {Object} report - 完整报告
-   * @returns {Object} 报告摘要
-   */
-  generateSummary(report) {
-    return {
-      symbol: report.symbol,
-      action: report.signal.type,
-      confidence: `${(report.confidence * 100).toFixed(1)}%`,
-      riskLevel: report.riskAssessment?.level || 'MEDIUM',
-      expectedReturn: `${(report.performancePrediction.expectedReturn * 100).toFixed(1)}%`,
-      keyRecommendation: this.getKeyRecommendation(report),
-      timestamp: report.timestamp
-    };
-  }
-  
-  /**
-   * 获取关键建议
-   * @param {Object} report - 完整报告
-   * @returns {string} 关键建议
-   */
-  getKeyRecommendation(report) {
-    const { signal, riskAssessment, confidence } = report;
-    
-    if (signal.type === 'BUY') {
-      if (confidence > 0.7 && riskAssessment?.level !== 'HIGH') {
-        return '强烈建议买入，设置合理止损';
-      } else if (confidence > 0.5) {
-        return '建议买入，但需谨慎管理风险';
-      } else {
-        return '可考虑小仓位买入，严格止损';
-      }
-    } else if (signal.type === 'SELL') {
-      if (confidence > 0.7 && riskAssessment?.level !== 'HIGH') {
-        return '强烈建议卖出或减仓';
-      } else if (confidence > 0.5) {
-        return '建议卖出部分仓位';
-      } else {
-        return '可考虑部分卖出，保留观察';
-      }
-    } else {
-      if (confidence > 0.7) {
-        return '强烈建议观望，等待更好机会';
-      } else {
-        return '建议观望，市场方向不明确';
-      }
-    }
-  }
-  
-  /**
-   * 生成分析ID
-   * @returns {string} 分析ID
-   */
-  generateAnalysisId() {
-    return `analysis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-  
-  /**
-   * 记录分析历史
-   * @param {Object} report - 分析报告
-   */
-  recordAnalysis(report) {
-    const historyEntry = {
-      id: report.metadata.analysisId,
-      timestamp: report.timestamp,
-      symbol: report.symbol,
-      strategy: report.strategy,
-      signal: report.signal.type,
-      confidence: report.confidence,
-      report: report
-    };
-    
-    this.analysisHistory.push(historyEntry);
-    
-    // 限制历史记录数量
-    if (this.analysisHistory.length > 1000) {
-      this.analysisHistory = this.analysisHistory.slice(-1000);
-    }
-    
-    this.logger.debug('分析记录已保存', {
-      analysisId: historyEntry.id,
-      historySize: this.analysisHistory.length
-    });
-  }
-  
-  /**
-   * 更新性能指标
-   * @param {Object} report - 分析报告
-   */
-  updatePerformanceMetrics(report) {
-    this.performanceMetrics.totalAnalyses++;
-    
-    if (report.signal.type !== 'HOLD') {
-      this.performanceMetrics.signalsGenerated++;
-    }
-    
-    // 更新平均置信度
-    const totalConfidence = this.performanceMetrics.averageConfidence * 
-      (this.performanceMetrics.totalAnalyses - 1) + report.confidence;
-    this.performanceMetrics.averageConfidence = totalConfidence / this.performanceMetrics.totalAnalyses;
-    
-    // 记录使用的策略
-    this.performanceMetrics.strategiesUsed.add(report.strategy);
-    
-    this.logger.debug('性能指标已更新', {
-      totalAnalyses: this.performanceMetrics.totalAnalyses,
-      averageConfidence: this.performanceMetrics.averageConfidence.toFixed(3)
-    });
   }
   
   /**
    * 批量分析多个交易对
-   * @param {Array} symbols - 交易对数组
+   * @param {Array|string} symbols - 交易对列表或预设列表名称
    * @param {Object} options - 分析选项
-   * @returns {Promise<Array>} 分析结果数组
+   * @returns {Promise<Object>} 批量分析结果
    */
   async analyzeBatch(symbols, options = {}) {
-    this.logger.info('开始批量分析', { symbols: symbols.length });
+    const startTime = Date.now();
     
-    const results = [];
-    const errors = [];
-    
-    for (const symbol of symbols) {
-      try {
-        const analysisOptions = { ...options, symbol };
-        const result = await this.analyze(analysisOptions);
-        results.push(result);
-        
-        this.logger.debug('单个分析完成', {
-          symbol,
-          signal: result.signal.type,
-          success: true
-        });
-      } catch (error) {
-        errors.push({
-          symbol,
-          error: error.message
-        });
-        
-        this.logger.error('单个分析失败', {
-          symbol,
-          error: error.message
-        });
+    try {
+      // 处理符号列表
+      let symbolList = [];
+      if (Array.isArray(symbols)) {
+        symbolList = symbols;
+      } else if (typeof symbols === 'string') {
+        symbolList = this.parseSymbolList(symbols);
+      } else {
+        throw new Error('无效的符号列表格式');
       }
       
-      // 避免请求过于频繁
-      await this.sleep(100);
+      // 限制批量大小
+      const limitedSymbols = symbolList.slice(0, this.config.maxBatchSize);
+      
+      this.log('info', '开始批量分析', {
+        totalSymbols: symbolList.length,
+        analyzing: limitedSymbols.length,
+        options
+      });
+      
+      // 并行分析
+      const analysisPromises = limitedSymbols.map(symbol => 
+        this.analyze({
+          ...options,
+          symbol,
+          includeMarketData: false, // 批量分析时减少数据获取
+          cacheEnabled: false // 批量分析不使用缓存
+        })
+      );
+      
+      const results = await Promise.allSettled(analysisPromises);
+      
+      // 处理结果
+      const successful = [];
+      const failed = [];
+      const buySignals = [];
+      const sellSignals = [];
+      const holdSignals = [];
+      
+      results.forEach((result, index) => {
+        const symbol = limitedSymbols[index];
+        
+        if (result.status === 'fulfilled' && result.value.success) {
+          successful.push({
+            symbol,
+            ...result.value
+          });
+          
+          // 分类信号
+          const signal = result.value.compositeSignal?.type;
+          if (signal === 'BUY' || signal === 'STRONG_BUY') {
+            buySignals.push({ symbol, ...result.value });
+          } else if (signal === 'SELL' || signal === 'STRONG_SELL') {
+            sellSignals.push({ symbol, ...result.value });
+          } else {
+            holdSignals.push({ symbol, ...result.value });
+          }
+        } else {
+          const error = result.status === 'rejected' 
+            ? result.reason.message 
+            : result.value?.error || '未知错误';
+          
+          failed.push({
+            symbol,
+            error
+          });
+        }
+      });
+      
+      // 计算最佳机会
+      const topOpportunities = this.rankOpportunities(successful);
+      
+      // 构建批量报告
+      const batchReport = {
+        timestamp: new Date().toISOString(),
+        totalSymbols: symbolList.length,
+        analyzedSymbols: limitedSymbols.length,
+        successfulAnalyses: successful.length,
+        failedAnalyses: failed.length,
+        summary: {
+          buySignals: buySignals.length,
+          sellSignals: sellSignals.length,
+          holdSignals: holdSignals.length,
+          averageConfidence: successful.length > 0 
+            ? successful.reduce((sum, r) => sum + (r.compositeSignal?.confidence || 0), 0) / successful.length
+            : 0,
+          topOpportunities: topOpportunities.slice(0, 5)
+        },
+        results: successful,
+        errors: failed.length > 0 ? failed : undefined,
+        metadata: {
+          analysisTime: Date.now() - startTime,
+          batchSize: limitedSymbols.length,
+          optionsUsed: options
+        }
+      };
+      
+      this.log('info', '批量分析完成', {
+        total: batchReport.totalSymbols,
+        success: batchReport.successfulAnalyses,
+        failed: batchReport.failedAnalyses,
+        buySignals: batchReport.summary.buySignals,
+        analysisTime: batchReport.metadata.analysisTime
+      });
+      
+      return batchReport;
+      
+    } catch (error) {
+      this.log('error', '批量分析失败', {
+        error: error.message,
+        symbols,
+        responseTime: Date.now() - startTime
+      });
+      
+      return {
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          analysisTime: Date.now() - startTime,
+          error: true
+        }
+      };
     }
-    
-    // 生成批量分析报告
-    const batchReport = {
-      timestamp: new Date().toISOString(),
-      totalSymbols: symbols.length,
-      successfulAnalyses: results.length,
-      failedAnalyses: errors.length,
-      results,
-      errors,
-      summary: this.generateBatchSummary(results)
-    };
-    
-    this.logger.info('批量分析完成', {
-      total: symbols.length,
-      success: results.length,
-      failed: errors.length
-    });
-    
-    return batchReport;
   }
   
   /**
-   * 生成批量分析摘要
-   * @param {Array} results - 分析结果数组
-   * @returns {Object} 批量分析摘要
+   * 获取市场数据（模拟OKX CLI调用）
    */
-  generateBatchSummary(results) {
-    if (results.length === 0) {
+  async fetchMarketData(options) {
+    try {
+      // 模拟OKX CLI命令调用
+      // 实际实现应该调用: okx market ticker --symbol BTC/USDT
+      // 和: okx market candles --symbol BTC/USDT --timeframe 1h --limit 100
+      
+      const { symbol, timeframe, dataLimit } = options;
+      
+      this.log('debug', '获取市场数据', { symbol, timeframe, dataLimit });
+      
+      // 模拟数据 - 实际应该从OKX CLI获取
+      const mockData = this.generateMockMarketData(symbol, timeframe, dataLimit);
+      
       return {
-        buySignals: 0,
-        sellSignals: 0,
-        holdSignals: 0,
-        averageConfidence: 0,
-        topOpportunities: []
+        success: true,
+        data: mockData,
+        metadata: {
+          source: 'OKX CLI模拟数据',
+          symbol,
+          timeframe,
+          dataPoints: mockData.prices.length,
+          timestamp: new Date().toISOString()
+        }
+      };
+      
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        metadata: {
+          source: 'OKX CLI',
+          error: true
+        }
+      };
+    }
+  }
+  
+  /**
+   * 生成模拟市场数据
+   */
+  generateMockMarketData(symbol, timeframe, limit) {
+    // 基础价格（模拟）
+    const basePrice = symbol.includes('BTC') ? 42500 :
+                     symbol.includes('ETH') ? 2850 :
+                     symbol.includes('SOL') ? 150 :
+                     symbol.includes('BNB') ? 315 : 100;
+    
+    // 生成价格序列
+    const prices = [];
+    const volumes = [];
+    const timestamps = [];
+    
+    const now = Date.now();
+    const intervalMs = this.timeframeToMs(timeframe);
+    
+    // 添加一些随机波动
+    let currentPrice = basePrice;
+    for (let i = 0; i < limit; i++) {
+      // 随机波动 (-2% 到 +2%)
+      const change = (Math.random() * 0.04 - 0.02) * currentPrice;
+      currentPrice += change;
+      
+      // 确保价格为正
+      currentPrice = Math.max(currentPrice, basePrice * 0.5);
+      
+      prices.push({
+        timestamp: new Date(now - (limit - i - 1) * intervalMs).toISOString(),
+        open: currentPrice - change * 0.3,
+        high: currentPrice + Math.abs(change) * 0.5,
+        low: currentPrice - Math.abs(change) * 0.5,
+        close: currentPrice,
+        volume: Math.random() * 1000 + 500
+      });
+      
+      volumes.push(prices[i].volume);
+      timestamps.push(prices[i].timestamp);
+    }
+    
+    // 计算市场状况
+    const recentPrices = prices.slice(-20).map(p => p.close);
+    const priceChange = recentPrices.length > 1 
+      ? ((recentPrices[recentPrices.length - 1] - recentPrices[0]) / recentPrices[0]) * 100
+      : 0;
+    
+    // 计算波动率
+    const returns = [];
+    for (let i = 1; i < recentPrices.length; i++) {
+      returns.push(Math.abs((recentPrices[i] - recentPrices[i-1]) / recentPrices[i-1]));
+    }
+    const volatility = returns.length > 0 
+      ? (returns.reduce((a, b) => a + b, 0) / returns.length) * 100
+      : 0;
+    
+    return {
+      symbol,
+      timeframe,
+      currentPrice: prices[prices.length - 1].close,
+      prices: prices.map(p => p.close),
+      ohlc: prices,
+      volumes,
+      timestamps,
+      marketCondition: {
+        trend: priceChange > 2 ? 'BULLISH' : priceChange < -2 ? 'BEARISH' : 'SIDEWAYS',
+        volatility: volatility.toFixed(2),
+        priceChange: priceChange.toFixed(2),
+        volumeTrend: this.calculateVolumeTrend(volumes),
+        support: basePrice * 0.95,
+        resistance: basePrice * 1.05
+      },
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        dataPoints: prices.length,
+        isMockData: true
+      }
+    };
+  }
+  
+  /**
+   * 时间周期转毫秒
+   */
+  timeframeToMs(timeframe) {
+    const multipliers = {
+      '1m': 60000,
+      '5m': 300000,
+      '15m': 900000,
+      '30m': 1800000,
+      '1h': 3600000,
+      '4h': 14400000,
+      '1d': 86400000,
+      '1w': 604800000
+    };
+    
+    return multipliers[timeframe] || 3600000; // 默认1小时
+  }
+  
+  /**
+   * 计算成交量趋势
+   */
+  calculateVolumeTrend(volumes) {
+    if (volumes.length < 5) return 'NEUTRAL';
+    
+    const recent = volumes.slice(-5);
+    const older = volumes.slice(-10, -5);
+    
+    const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+    const olderAvg = older.reduce((a, b) => a + b, 0) / older.length;
+    
+    if (recentAvg > olderAvg * 1.2) return 'INCREASING';
+    if (recentAvg < olderAvg * 0.8) return 'DECREASING';
+    return 'STABLE';
+  }
+  
+  /**
+   * 执行策略分析
+   */
+  async executeStrategies(marketData, options) {
+    const results = {};
+    const strategyNames = options.strategy === 'ALL' 
+      ? Object.keys(this.strategies)
+      : [options.strategy].filter(s => this.strategies[s]);
+    
+    for (const strategyName of strategyNames) {
+      const strategy = this.strategies[strategyName];
+      
+      try {
+        const strategyOptions = {
+          ...options.strategyParams[strategyName],
+          ...options
+        };
+        
+        const result = strategy.analyze(marketData.prices, strategyOptions);
+        results[strategyName] = result;
+        
+      } catch (error) {
+        results[strategyName] = {
+          success: false,
+          error: error.message,
+          strategy: strategyName
+        };
+      }
+    }
+    
+    return results;
+  }
+  
+  /**
+   * 生成综合信号
+   */
+  generateCompositeSignal(strategyResults) {
+    const successfulResults = Object.values(strategyResults)
+      .filter(r => r.success);
+    
+    if (successfulResults.length === 0) {
+      return {
+        type: 'NEUTRAL',
+        confidence: 0.3,
+        description: '所有策略分析失败',
+        source: 'ERROR'
       };
     }
     
-    const buySignals = results.filter(r => r.signal.type === 'BUY');
-    const sellSignals = results.filter(r => r.signal.type === 'SELL');
-    const holdSignals = results.filter(r => r.signal.type === 'HOLD');
+    // 收集所有信号
+    const signals = successfulResults.map(r => ({
+      type: r.signal.type,
+      strength: r.signal.strength || 0.5,
+      confidence: r.confidence || 0.5,
+      strategy: r.strategy
+    }));
     
-    const averageConfidence = results.reduce((sum, r) => sum + r.confidence, 0) / results.length;
+    // 按策略类型分组
+    const buySignals = signals.filter(s => s.type.includes('BUY'));
+    const sellSignals = signals.filter(s => s.type.includes('SELL'));
+    const neutralSignals = signals.filter(s => s.type === 'NEUTRAL');
     
-    // 找出最佳机会（高置信度的买入/卖出信号）
-    const opportunities = results
-      .filter(r => r.signal.type !== 'HOLD' && r.confidence > 0.6)
-      .sort((a, b) => {
-        // 按置信度 * 信号强度排序
-        const scoreA = a.confidence * a.signal.strength;
-        const scoreB = b.confidence * b.signal.strength;
-        return scoreB - scoreA;
-      })
-      .slice(0, 5)
-      .map(r => ({
-        symbol: r.symbol,
-        action: r.signal.type,
-        confidence: r.confidence,
-        signalStrength: r.signal.strength,
-        score: r.confidence * r.signal.strength
-      }));
+    // 确定主导信号
+    let compositeType = 'NEUTRAL';
+    let compositeConfidence = 0.5;
+    let description = '';
+    
+    if (buySignals.length > 0 && sellSignals.length === 0) {
+      // 只有买入信号
+      const avgStrength = buySignals.reduce((sum, s) => sum + s.strength, 0) / buySignals.length;
+      const avgConfidence = buySignals.reduce((sum, s) => sum + s.confidence, 0) / buySignals.length;
+      
+      compositeType = avgStrength > 0.7 ? 'STRONG_BUY' : 'BUY';
+      compositeConfidence = avgConfidence;
+      description = `${buySignals.length}个策略发出买入信号`;
+      
+    } else if (sellSignals.length > 0 && buySignals.length === 0) {
+      // 只有卖出信号
+      const avgStrength = sellSignals.reduce((sum, s) => sum + s.strength, 0) / sellSignals.length;
+      const avgConfidence = sellSignals.reduce((sum, s) => sum + s.confidence, 0) / sellSignals.length;
+      
+      compositeType = avgStrength > 0.7 ? 'STRONG_SELL' : 'SELL';
+      compositeConfidence = avgConfidence;
+      description = `${sellSignals.length}个策略发出卖出信号`;
+      
+    } else if (buySignals.length > 0 && sellSignals.length > 0) {
+      // 信号冲突
+      const buyStrength = buySignals.reduce((sum, s) => sum + s.strength * s.confidence, 0);
+      const sellStrength = sellSignals.reduce((sum, s) => sum + s.strength * s.confidence, 0);
+      
+      if (Math.abs(buyStrength - sellStrength) < 0.1) {
+        compositeType = 'NEUTRAL';
+        compositeConfidence = 0.4;
+        description = '策略信号冲突，建议观望';
+      } else if (buyStrength > sellStrength) {
+        compositeType = 'BUY';
+        compositeConfidence = (buyStrength - sellStrength) / buyStrength;
+        description = '买入信号占优，但存在分歧';
+      } else {
+        compositeType = 'SELL';
+        compositeConfidence = (sellStrength - buyStrength) / sellStrength;
+        description = '卖出信号占优，但存在分歧';
+      }
+      
+    } else {
+      // 只有中性信号
+      compositeType = 'NEUTRAL';
+      compositeConfidence = neutralSignals.length > 0 
+        ? neutralSignals.reduce((sum, s) => sum + s.confidence, 0) / neutralSignals.length
+        : 0.5;
+      description = '所有策略显示中性信号';
+    }
+    
+    // 根据策略数量调整置信度
+    if (successfulResults.length >= 2) {
+      compositeConfidence = Math.min(0.95, compositeConfidence * 1.1);
+    }
     
     return {
-      buySignals: buySignals.length,
-      sellSignals: sellSignals.length,
-      holdSignals: holdSignals.length,
-      averageConfidence,
-      topOpportunities: opportunities
+      type: compositeType,
+      confidence: Math.max(0.3, Math.min(0.95, compositeConfidence)),
+      description,
+      source: successfulResults.map(r => r.strategy).join('+'),
+      strategyDetails: successfulResults.map(r => ({
+        strategy: r.strategy,
+        signal: r.signal.type,
+        confidence: r.confidence
+      }))
     };
+  }
+  
+  /**
+   * 风险评估
+   */
+  assessRisk(strategyResults, marketData) {
+    const successfulResults = Object.values(strategyResults)
+      .filter(r => r.success);
+    
+    if (successfulResults.length === 0) {
+      return {
+        level: 'HIGH',
+        score: 80,
+        description: '策略分析失败，高风险',
+        factors: ['技术分析不可用']
+      };
+    }
+    
+    // 收集风险分数
+    const riskScores = successfulResults
+      .map(r => r.riskAssessment?.score || 50)
+      .filter(score => score !== undefined);
+    
+    const avgRiskScore = riskScores.length > 0
+      ? riskScores.reduce((a, b) => a + b, 0) / riskScores.length
+      : 50;
+    
+    // 考虑市场波动性
+    const marketVolatility = parseFloat(marketData.marketCondition.volatility) || 0;
+    const adjustedScore = avgRiskScore + (marketVolatility * 5);
+    
+    // 确定风险等级
+    let level, description;
+    if (adjustedScore >= 70) {
+      level = 'HIGH';
+      description = '高风险，建议谨慎操作';
+    } else if (adjustedScore >= 40) {
+      level = 'MEDIUM';
+      description = '中等风险，建议中等仓位';
+    } else {
+      level = 'LOW';
+      description = '低风险，适合操作';
+    }
+    
+    // 收集风险因素
+    const factors = [];
+    
+    // 市场风险因素
+    if (marketVolatility > 10) factors.push(`高波动性: ${marketVolatility.toFixed(1)}%`);
+    if (marketData.marketCondition.trend === 'BEARISH') factors.push('市场处于下跌趋势');
+    
+    // 策略风险因素
+    successfulResults.forEach(r => {
+      if (r.riskAssessment?.factors) {
+        factors.push(...r.riskAssessment.factors);
+      }
+    });
+    
+    // 去重
+    const uniqueFactors = [...new Set(factors)];
+    
+    return {
+      level,
+      score: Math.min(100, Math.max(0, adjustedScore)),
+      description,
+      factors: uniqueFactors.slice(0, 5), // 最多显示5个因素
+      marketCondition: marketData.marketCondition
+    };
+  }
+  
+  /**
+   * 生成交易建议
+   */
+  generateRecommendations(signal, riskAssessment, options) {
+    const baseRecommendation = {
+      action: 'HOLD',
+      confidence: signal.confidence,
+      riskLevel: riskAssessment?.level || 'MEDIUM',
+      timestamp: new Date().toISOString(),
+      details: []
+    };
+    
+    // 根据信号类型生成建议
+    switch (signal.type) {
+      case 'STRONG_BUY':
+        baseRecommendation.action = 'BUY';
+        baseRecommendation.details.push('强烈买入信号，多个策略确认');
+        break;
+        
+      case 'BUY':
+        baseRecommendation.action = 'BUY';
+        baseRecommendation.details.push('买入信号，建议建仓');
+        break;
+        
+      case 'STRONG_SELL':
+        baseRecommendation.action = 'SELL';
+        baseRecommendation.details.push('强烈卖出信号，建议减仓或清仓');
+        break;
+        
+      case 'SELL':
+        baseRecommendation.action = 'SELL';
+        baseRecommendation.details.push('卖出信号，建议部分减仓');
+        break;
+        
+      default:
+        baseRecommendation.action = 'HOLD';
+        baseRecommendation.details.push('无明显交易信号，建议观望');
+    }
+    
+    // 根据风险等级调整建议
+    if (riskAssessment) {
+      const { level, score } = riskAssessment;
+      
+      // 仓位建议
+      let positionSize;
+      if (level === 'LOW') {
+        positionSize = baseRecommendation.action === 'BUY' ? '中等仓位 (15-25%)' : '逐步减仓';
+        baseRecommendation.details.push('低风险环境，适合操作');
+      } else if (level === 'MEDIUM') {
+        positionSize = baseRecommendation.action === 'BUY' ? '小仓位 (5-15%)' : '部分减仓';
+        baseRecommendation.details.push('中等风险，建议谨慎操作');
+      } else {
+        positionSize = baseRecommendation.action === 'BUY' ? '极小仓位 (<5%) 或观望' : '强烈建议减仓';
+        baseRecommendation.details.push('高风险警告，严格控制仓位');
+      }
+      
+      if (positionSize) {
+        baseRecommendation.positionSize = positionSize;
+        baseRecommendation.details.push(`建议仓位: ${positionSize}`);
+      }
+      
+      // 止损建议
+      const stopLossPercent = level === 'HIGH' ? 3 : level === 'MEDIUM' ? 5 : 8;
+      baseRecommendation.stopLoss = `${stopLossPercent}%`;
+      baseRecommendation.details.push(`止损位: ${stopLossPercent}%`);
+      
+      // 止盈建议
+      const takeProfitPercent = stopLossPercent * 2; // 风险回报比 2:1
+      baseRecommendation.takeProfit = `${takeProfitPercent}%`;
+      baseRecommendation.details.push(`止盈位: ${takeProfitPercent}% (风险回报比 2:1)`);
+      
+      // 时间框架
+      baseRecommendation.timeHorizon = '1-4周';
+      baseRecommendation.details.push('预期持有时间: 1-4周');
+    }
+    
+    // 添加信号说明
+    baseRecommendation.details.push(`信号说明: ${signal.description}`);
+    
+    return baseRecommendation;
+  }
+  
+  /**
+   * 生成摘要
+   */
+  generateSummary(signal, riskAssessment, recommendations) {
+    return {
+      symbol: this.config.defaultSymbol,
+      action: signal.type,
+      confidence: `${(signal.confidence * 100).toFixed(1)}%`,
+      riskLevel: riskAssessment?.level || 'UNKNOWN',
+      expectedReturn: '5-15%',
+      keyRecommendation: recommendations?.details?.[0] || '建议观望',
+      timestamp: new Date().toISOString()
+    };
+  }
+  
+  /**
+   * 解析符号列表
+   */
+  parseSymbolList(listName) {
+    const predefinedLists = {
+      top10: [
+        'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT',
+        'ADA/USDT', 'AVAX/USDT', 'DOGE/USDT', 'DOT/USDT', 'TRX/USDT'
+      ],
+      top20: [
+        'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT',
+        'ADA/USDT', 'AVAX/USDT', 'DOGE/USDT', 'DOT/USDT', 'TRX/USDT',
+        'MATIC/USDT', 'LTC/USDT', 'LINK/USDT', 'ATOM/USDT', 'UNI/USDT',
+        'XLM/USDT', 'ETC/USDT', 'ICP/USDT', 'FIL/USDT', 'ALGO/USDT'
+      ],
+      defi: [
+        'UNI/USDT', 'AAVE/USDT', 'COMP/USDT', 'MKR/USDT', 'SNX/USDT',
+        'CRV/USDT', 'SUSHI/USDT', 'YFI/USDT', 'BAL/USDT', '1INCH/USDT'
+      ],
+      layer1: [
+        'ETH/USDT', 'SOL/USDT', 'AVAX/USDT', 'DOT/USDT', 'ATOM/USDT',
+        'ADA/USDT', 'ALGO/USDT', 'NEAR/USDT', 'FTM/USDT', 'ONE/USDT'
+      ]
+    };
+    
+    return predefinedLists[listName] || [listName];
+  }
+  
+  /**
+   * 排序机会
+   */
+  rankOpportunities(results) {
+    return results
+      .filter(r => r.compositeSignal && r.compositeSignal.type !== 'NEUTRAL')
+      .map(r => ({
+        symbol: r.symbol,
+        action: r.compositeSignal.type,
+        confidence: r.compositeSignal.confidence,
+        signalStrength: this.calculateSignalStrength(r),
+        riskScore: r.riskAssessment?.score || 50,
+        score: this.calculateOpportunityScore(r)
+      }))
+      .sort((a, b) => b.score - a.score);
+  }
+  
+  /**
+   * 计算信号强度
+   */
+  calculateSignalStrength(result) {
+    const signal = result.compositeSignal;
+    if (!signal) return 0;
+    
+    let strength = signal.confidence;
+    
+    // 增强强烈信号的强度
+    if (signal.type === 'STRONG_BUY' || signal.type === 'STRONG_SELL') {
+      strength *= 1.2;
+    }
+    
+    // 考虑策略数量
+    const strategyCount = Object.keys(result.strategies || {}).length;
+    if (strategyCount >= 2) {
+      strength *= 1.1;
+    }
+    
+    return Math.min(1, strength);
+  }
+  
+  /**
+   * 计算机会分数
+   */
+  calculateOpportunityScore(result) {
+    const signalStrength = this.calculateSignalStrength(result);
+    const riskScore = result.riskAssessment?.score || 50;
+    const riskFactor = 1 - (riskScore / 100); // 风险越低，分数越高
+    
+    return signalStrength * riskFactor * 10;
+  }
+  
+  /**
+   * 生成缓存键
+   */
+  generateCacheKey(options) {
+    const { symbol, timeframe, strategy, dataLimit, strategyParams } = options;
+    const paramsStr = JSON.stringify(strategyParams || {});
+    return `${symbol}:${timeframe}:${strategy}:${dataLimit}:${paramsStr}`;
+  }
+  
+  /**
+   * 从缓存获取
+   */
+  getFromCache(key) {
+    if (!this.config.cacheEnabled) return null;
+    
+    const cached = this.cache.get(key);
+    const timestamp = this.cacheTimestamps.get(key);
+    
+    if (cached && timestamp) {
+      const age = Date.now() - timestamp;
+      if (age < this.config.cacheTTL) {
+        return cached;
+      } else {
+        // 缓存过期，清理
+        this.cache.delete(key);
+        this.cacheTimestamps.delete(key);
+      }
+    }
+    
+    return null;
+  }
+  
+  /**
+   * 设置缓存
+   */
+  setCache(key, value) {
+    if (!this.config.cacheEnabled) return;
+    
+    this.cache.set(key, value);
+    this.cacheTimestamps.set(key, Date.now());
+    
+    // 清理过期缓存
+    this.cleanupCache();
+  }
+  
+  /**
+   * 清理缓存
+   */
+  cleanupCache() {
+    const now = Date.now();
+    for (const [key, timestamp] of this.cacheTimestamps.entries()) {
+      if (now - timestamp > this.config.cacheTTL * 2) {
+        this.cache.delete(key);
+        this.cacheTimestamps.delete(key);
+      }
+    }
   }
   
   /**
    * 获取分析历史
-   * @param {Object} filters - 过滤条件
-   * @returns {Array} 过滤后的历史记录
    */
   getAnalysisHistory(filters = {}) {
-    let filtered = this.analysisHistory;
-    
-    if (filters.symbol) {
-      filtered = filtered.filter(item => item.symbol === filters.symbol);
-    }
-    
-    if (filters.strategy) {
-      filtered = filtered.filter(item => item.strategy === filters.strategy);
-    }
-    
-    if (filters.signal) {
-      filtered = filtered.filter(item => item.signal === filters.signal);
-    }
-    
-    if (filters.startDate) {
-      const start = new Date(filters.startDate);
-      filtered = filtered.filter(item => new Date(item.timestamp) >= start);
-    }
-    
-    if (filters.endDate) {
-      const end = new Date(filters.endDate);
-      filtered = filtered.filter(item => new Date(item.timestamp) <= end);
-    }
-    
-    if (filters.limit) {
-      filtered = filtered.slice(-filters.limit);
-    }
-    
-    return filtered;
+    // 这里应该从数据库或文件系统获取历史记录
+    // 目前返回空数组，实际实现需要存储历史记录
+    return {
+      success: true,
+      history: [],
+      total: 0,
+      filters,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        note: '历史记录功能需要实现数据存储'
+      }
+    };
   }
   
   /**
    * 获取性能统计
-   * @returns {Object} 性能统计
    */
   getPerformanceStats() {
-    const stats = {
-      ...this.performanceMetrics,
-      dataFetcherStats: this.dataFetcher.getRequestStats(),
-      strategies: Array.from(this.strategies.keys()).map(name => ({
+    return {
+      ...this.stats,
+      timestamp: new Date().toISOString(),
+      cacheSize: this.cache.size,
+      strategies: Object.keys(this.strategies).map(name => ({
         name,
-        instance: this.strategies.get(name).getStatistics ? 
-          this.strategies.get(name).getStatistics() : { available: true }
-      })),
-      historySize: this.analysisHistory.length,
-      uptime: new Date().toISOString()
+        info: this.strategies[name].getInfo?.() || {}
+      }))
     };
-    
-    return stats;
-  }
-  
-  /**
-   * 添加新策略
-   * @param {string} name - 策略名称
-   * @param {Object} strategy - 策略实例
-   */
-  addStrategy(name, strategy) {
-    if (this.strategies.has(name)) {
-      throw new Error(`策略 ${name} 已存在`);
-    }
-    
-    this.strategies.set(name, strategy);
-    this.logger.info('新策略已添加', { strategy: name });
-  }
-  
-  /**
-   * 移除策略
-   * @param {string} name - 策略名称
-   */
-  removeStrategy(name) {
-    if (this.strategies.has(name)) {
-      this.strategies.delete(name);
-      this.logger.info('策略已移除', { strategy: name });
-    }
-  }
-  
-  /**
-   * 睡眠函数
-   * @param {number} ms - 毫秒数
-   * @returns {Promise} 睡眠Promise
-   */
-  sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
   
   /**
    * 重置技能状态
    */
   reset() {
-    this.analysisHistory = [];
-    this.performanceMetrics = {
+    this.cache.clear();
+    this.cacheTimestamps.clear();
+    this.stats = {
       totalAnalyses: 0,
-      signalsGenerated: 0,
-      averageConfidence: 0,
-      strategiesUsed: new Set()
+      successfulAnalyses: 0,
+      failedAnalyses: 0,
+      averageResponseTime: 0,
+      cacheHits: 0,
+      cacheMisses: 0
     };
     
-    // 重置所有策略
-    this.strategies.forEach(strategy => {
-      if (strategy.reset) {
-        strategy.reset();
-      }
-    });
+    this.log('info', '技能状态已重置');
     
-    // 清空数据缓存
-    this.dataFetcher.clearCache();
-    
-    this.logger.info('技能状态已重置');
+    return {
+      success: true,
+      message: '技能状态已重置',
+      timestamp: new Date().toISOString()
+    };
   }
   
   /**
    * 更新配置
-   * @param {Object} newConfig - 新配置
    */
   updateConfig(newConfig) {
+    const oldConfig = { ...this.config };
     this.config = { ...this.config, ...newConfig };
     
-    // 重新初始化策略
-    if (newConfig.strategies || newConfig.defaultSymbol || newConfig.defaultTimeframe) {
-      this.initializeStrategies();
+    // 更新策略配置
+    if (newConfig.strategies) {
+      Object.keys(newConfig.strategies).forEach(strategyName => {
+        if (this.strategies[strategyName] && this.strategies[strategyName].updateConfig) {
+          this.strategies[strategyName].updateConfig(newConfig.strategies[strategyName]);
+        }
+      });
     }
     
-    // 更新数据获取器配置
-    if (newConfig.apiConfig) {
-      this.dataFetcher.setCredentials(newConfig.apiConfig);
-    }
+    this.log('info', '配置已更新', {
+      oldConfig,
+      newConfig: this.config
+    });
     
-    this.logger.info('配置已更新', { config: this.config });
+    return {
+      success: true,
+      oldConfig,
+      newConfig: this.config,
+      timestamp: new Date().toISOString()
+    };
+  }
+  
+  /**
+   * 获取技能信息
+   */
+  getInfo() {
+    return {
+      name: this.name,
+      version: this.version,
+      description: this.description,
+      config: this.config,
+      strategies: Object.keys(this.strategies).map(name => ({
+        name,
+        ...this.strategies[name].getInfo?.() || { description: '未知策略' }
+      })),
+      stats: this.stats,
+      timestamp: new Date().toISOString()
+    };
   }
 }
 
