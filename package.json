@@ -1,7 +1,8 @@
 {
-  "name": "@okx_ai/smart-trading-signals",
+  "name": "@okx_ai/dual-signal-analyzer",
   "version": "1.0.0",
-  "description": "基于RSI和MACD双指标的交易信号分析Skill，提供智能买卖信号和风险管理建议",
+  "description": "基于RSI和MACD双指标交叉验证的交易信号分析Skill，提供智能买卖信号和风险管理建议",
+  "keywords": ["okx", "trading", "strategy", "analysis", "crypto", "rsi", "macd", "dual-signal", "risk-management"],
   "main": "index.js",
   "scripts": {
     "test": "echo \"测试通过\"",
@@ -37,23 +38,23 @@
   },
   "homepage": "https://github.com/Lobster-Tempo/trading-strategy-skill#readme",
   "okxSkill": {
-    "name": "smart-trading-signals",
-    "title": "智能交易信号",
-    "description": "基于RSI和MACD双指标的交易信号分析Skill",
+    "name": "dual-signal-analyzer",
+    "title": "双信号分析器",
+    "description": "基于RSI和MACD双指标交叉验证的交易信号分析Skill",
     "version": "1.0.0",
     "category": "trading-analysis",
-    "tags": ["trading", "strategy", "analysis", "crypto"],
+    "tags": ["trading", "strategy", "analysis", "crypto", "rsi", "macd", "dual-signal"],
     "requires": ["okx-cex-market", "okx-cex-trade"],
     "triggers": [
-      "交易信号",
-      "智能分析", 
-      "RSI MACD",
-      "批量扫描",
-      "风险评估",
-      "交易建议"
+      "双信号分析",
+      "RSI MACD验证",
+      "交叉验证信号",
+      "智能交易分析",
+      "风险评分",
+      "机会扫描"
     ],
-    "commands": ["analyze", "batch", "risk"],
-    "installation": "npx @okx_ai/okx-trade-cli@latest skill add smart-trading-signals"
+    "commands": ["analyze", "scan", "risk"],
+    "installation": "npx @okx_ai/okx-trade-cli@latest skill add dual-signal-analyzer"
   },
   "files": [
     "index.js",
